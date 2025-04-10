@@ -21,7 +21,7 @@ A RESTful API backend for an Electronic Waste Bank System built with Express.js,
 - Node.js (v18 or higher)
 - MySQL (v8.0 or higher)
 - Python 3.8+ (for AI features)
-- YOLOv8 dependencies (for object detection)
+- YOLOv11 dependencies (for object detection)
 
 ## Project Structure
 

@@ -1,58 +1,135 @@
-import prisma from '../config/database';
-import { Content, ContentType } from '../models/types';
+import { supabase } from '../config/supabase';
 import { AppError } from '../utils/error';
+
+export interface Content {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  imageUrl?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export class ContentService {
   async getAllContent(): Promise<Content[]> {
-    return prisma.content.findMany({
-      orderBy: { createdAt: 'desc' }
-    });
+    const { data, error } = await supabase
+      .from('contents')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new AppError(500, error.message);
+    }
+
+    return (data || []).map(item => ({
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      type: item.type,
+      imageUrl: item.image_url,
+      createdAt: new Date(item.created_at),
+      updatedAt: new Date(item.updated_at)
+    }));
   }
 
   async getContentById(id: string): Promise<Content> {
-    const content = await prisma.content.findUnique({
-      where: { id }
-    });
+    const { data, error } = await supabase
+      .from('contents')
+      .select('*')
+      .eq('id', id)
+      .single();
 
-    if (!content) {
+    if (error) {
       throw new AppError(404, 'Content not found');
     }
 
-    return content;
+    return {
+      id: data.id,
+      title: data.title,
+      body: data.body,
+      type: data.type,
+      imageUrl: data.image_url,
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at)
+    };
   }
 
-  async createContent(data: { title: string; body: string; type: ContentType; imageUrl?: string }): Promise<Content> {
-    return prisma.content.create({
-      data
-    });
-  }
+  async createContent(
+    title: string,
+    body: string,
+    type: string,
+    imageUrl?: string
+  ): Promise<Content> {
+    const { data, error } = await supabase
+      .from('contents')
+      .insert({
+        title,
+        body,
+        type,
+        image_url: imageUrl
+      })
+      .select()
+      .single();
 
-  async updateContent(id: string, data: Partial<Content>): Promise<Content> {
-    const content = await prisma.content.findUnique({
-      where: { id }
-    });
-
-    if (!content) {
-      throw new AppError(404, 'Content not found');
+    if (error) {
+      throw new AppError(400, error.message);
     }
 
-    return prisma.content.update({
-      where: { id },
-      data
-    });
+    return {
+      id: data.id,
+      title: data.title,
+      body: data.body,
+      type: data.type,
+      imageUrl: data.image_url,
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at)
+    };
+  }
+
+  async updateContent(
+    id: string,
+    title: string,
+    body: string,
+    type: string,
+    imageUrl?: string
+  ): Promise<Content> {
+    const updateData: Record<string, any> = {};
+    if (title) updateData.title = title;
+    if (body) updateData.body = body;
+    if (type) updateData.type = type;
+    if (imageUrl !== undefined) updateData.image_url = imageUrl;
+
+    const { data, error } = await supabase
+      .from('contents')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppError(400, error.message);
+    }
+
+    return {
+      id: data.id,
+      title: data.title,
+      body: data.body,
+      type: data.type,
+      imageUrl: data.image_url,
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at)
+    };
   }
 
   async deleteContent(id: string): Promise<void> {
-    const content = await prisma.content.findUnique({
-      where: { id }
-    });
+    const { error } = await supabase
+      .from('contents')
+      .delete()
+      .eq('id', id);
 
-    if (!content) {
-      throw new AppError(404, 'Content not found');
+    if (error) {
+      throw new AppError(400, error.message);
     }
-
-    await prisma.content.delete({
-      where: { id }
-    });
   }
 }

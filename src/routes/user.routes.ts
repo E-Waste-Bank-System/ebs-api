@@ -1,37 +1,33 @@
 import { Router } from 'express';
-import multer from 'multer';
-import path from 'path';
 import {
   getProfile,
   updateProfile,
   uploadEwaste,
   getTransactions,
   getSchedules,
-  confirmSchedule
+  updateSchedule
 } from '../controllers/user.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { uploadFile } from '../middlewares/upload.middleware';
 
 const router = Router();
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/uploads');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ storage });
-
+// All routes require authentication
 router.use(authenticate);
+router.use(authorize(['USER']));
 
+// User profile routes
 router.get('/profile', getProfile);
-router.put('/profile', updateProfile);
-router.post('/ewaste', upload.single('image'), uploadEwaste);
+router.patch('/profile', updateProfile);
+
+// E-waste routes
+router.post('/ewaste', ...uploadFile('image'), uploadEwaste);
+
+// Transaction routes
 router.get('/transactions', getTransactions);
+
+// Schedule routes
 router.get('/schedules', getSchedules);
-router.patch('/schedules/:id/confirm', confirmSchedule);
+router.patch('/schedule/:id', updateSchedule);
 
 export default router; 

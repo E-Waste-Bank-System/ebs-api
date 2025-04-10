@@ -8,6 +8,7 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+ebs-cloud-456404-031e8510795a.json
 
 # Build output
 dist/

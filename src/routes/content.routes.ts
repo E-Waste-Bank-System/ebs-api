@@ -1,18 +1,18 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middlewares/auth.middleware';
 import {
-  getContents,
-  getContent,
+  getAllContent,
+  getContentById,
   createContent,
   updateContent,
   deleteContent
 } from '../controllers/content.controller';
+import { authenticate, authorize } from '../middlewares/auth.middleware';
 
 const router = Router();
 
 // Public routes
-router.get('/', getContents);
-router.get('/:id', getContent);
+router.get('/', getAllContent);
+router.get('/:id', getContentById);
 
 // Admin routes
 router.post('/', authenticate, authorize(['ADMIN']), createContent);

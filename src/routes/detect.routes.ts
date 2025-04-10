@@ -1,26 +1,17 @@
 import { Router } from 'express';
-import multer from 'multer';
-import path from 'path';
-import { detectEwaste, predictPrice } from '../controllers/detect.controller';
+import { detectFromImage, predictEwastePrice } from '../controllers/detect.controller';
 import { authenticate } from '../middlewares/auth.middleware';
+import { uploadFile } from '../middlewares/upload.middleware';
 
 const router = Router();
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/uploads');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ storage });
-
+// All routes require authentication
 router.use(authenticate);
 
-router.post('/detect', upload.single('image'), detectEwaste);
-router.post('/predict-price', predictPrice);
+// Detect e-waste from image
+router.post('/detect', ...uploadFile('image'), detectFromImage);
+
+// Predict price for e-waste
+router.post('/predict-price', predictEwastePrice);
 
 export default router; 

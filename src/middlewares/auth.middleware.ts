@@ -1,24 +1,60 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { supabase } from '../config/supabase';
 import { AppError } from '../utils/error';
 
-interface JwtPayload {
+// Define the user type from Supabase
+interface SupabaseUser {
   id: string;
   role: string;
+  email: string;
+}
+
+// Extend the Express Request type
+declare global {
+  namespace Express {
+    interface Request {
+      user?: SupabaseUser;
+    }
+  }
 }
 
 export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new AppError(401, 'No token provided');
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as JwtPayload;
-    req.user = decoded;
+    const token = authHeader.split(' ')[1];
+    
+    // Verify the token with Supabase
+    const { data, error } = await supabase.auth.getUser(token);
+    
+    if (error || !data.user) {
+      throw new AppError(401, 'Invalid token');
+    }
+
+    // Get additional user data from Supabase
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', data.user.id)
+      .single();
+
+    if (userError || !userData) {
+      throw new AppError(401, 'User not found');
+    }
+
+    // Set user on request
+    req.user = {
+      id: data.user.id,
+      role: userData.role,
+      email: data.user.email || ''
+    };
+    
     next();
   } catch (error) {
-    next(new AppError(401, 'Invalid token'));
+    next(error instanceof AppError ? error : new AppError(401, 'Authentication failed'));
   }
 };
 

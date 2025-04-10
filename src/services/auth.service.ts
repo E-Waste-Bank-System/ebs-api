@@ -1,65 +1,113 @@
-import bcrypt from 'bcryptjs';
-import prisma from '../config/database';
-import { generateToken } from '../config/jwt';
-import { User, Role } from '../models/types';
+import { supabase } from '../config/supabase';
 import { AppError } from '../utils/error';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: Date;
+}
 
 export class AuthService {
   async register(name: string, email: string, password: string): Promise<{ user: Partial<User>; token: string }> {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      throw new AppError(400, 'Email already registered');
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: 'USER' as Role
-      }
+    // First, create a user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
     });
 
-    const token = generateToken({ id: user.id, role: user.role });
-    const { password: _, ...userWithoutPassword } = user;
-    
-    return { user: userWithoutPassword, token };
+    if (authError) {
+      throw new AppError(authError.status || 400, authError.message);
+    }
+
+    if (!authData.user) {
+      throw new AppError(400, 'Failed to create user');
+    }
+
+    // Then, store additional user data in the 'users' table
+    const { error: profileError } = await supabase
+      .from('users')
+      .insert({
+        id: authData.user.id,
+        name,
+        email,
+        role: 'USER',
+      });
+
+    if (profileError) {
+      // If failed to create profile, attempt to delete the auth user
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      throw new AppError(400, profileError.message);
+    }
+
+    return {
+      user: {
+        id: authData.user.id,
+        name,
+        email,
+        role: 'USER',
+      },
+      token: authData.session?.access_token || '',
+    };
   }
 
   async login(email: string, password: string): Promise<{ user: Partial<User>; token: string }> {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      throw new AppError(401, 'Invalid credentials');
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new AppError(401, 'Invalid credentials');
-    }
-
-    const token = generateToken({ id: user.id, role: user.role });
-    const { password: _, ...userWithoutPassword } = user;
-
-    return { user: userWithoutPassword, token };
-  }
-
-  async getProfile(userId: string): Promise<Partial<User>> {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true
-      }
+    // Sign in to Supabase auth
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
 
-    if (!user) {
+    if (authError) {
+      throw new AppError(authError.status || 401, 'Invalid credentials');
+    }
+
+    if (!authData.user || !authData.session) {
+      throw new AppError(401, 'Invalid credentials');
+    }
+
+    // Get user profile from the 'users' table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, name, email, role, created_at')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (userError || !userData) {
+      throw new AppError(401, 'User profile not found');
+    }
+
+    return {
+      user: {
+        id: userData.id,
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+        createdAt: new Date(userData.created_at),
+      },
+      token: authData.session.access_token,
+    };
+  }
+
+  async getProfile(userId: string): Promise<User> {
+    // Get user profile from the 'users' table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, name, email, role, created_at')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !userData) {
       throw new AppError(404, 'User not found');
     }
 
-    return user;
+    return {
+      id: userData.id,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role,
+      createdAt: new Date(userData.created_at),
+    };
   }
 }

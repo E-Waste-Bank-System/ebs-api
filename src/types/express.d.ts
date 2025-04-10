@@ -1,12 +1,15 @@
-import { User } from '../models/types';
+// This file is kept for reference but not used
+// The user property is already defined in auth.middleware.ts
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-        role: string;
-      };
-    }
-  }
-} 
+// import { User } from '../models/types';
+
+// declare global {
+//   namespace Express {
+//     interface Request {
+//       user?: {
+//         id: string;
+//         role: string;
+//       };
+//     }
+//   }
+// } 

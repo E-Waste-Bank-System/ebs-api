@@ -9,7 +9,7 @@ A RESTful API backend for an Electronic Waste Bank System built with Express.js,
 - 📦 E-waste management
 - 💰 Transaction handling
 - 📅 Pickup scheduling
-- 🤖 AI-powered e-waste detection (YOLOv8)
+- 🤖 AI-powered e-waste detection (YOLOv11)
 - 📝 Dynamic content management
 - 🔄 Real-time price prediction
 - 📸 Image upload support
@@ -128,7 +128,7 @@ npm start
 1. Import the Postman collection:
    - Open Postman
    - Click "Import" -> "Raw Text"
-   - Paste the contents of `postman/EBS-API.postman_collection.json`
+   - Select `ebs-collestion.json`
 
 2. Set up environment variables:
    - Create a new environment

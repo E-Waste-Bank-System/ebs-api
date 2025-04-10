@@ -1,8 +1,12 @@
 import { Request, Response } from 'express';
 import prisma from '../config/database';
-import { AppError } from '../middlewares/error.middleware';
+import { AppError } from '../utils/error';
 
-export const getProfile = async (req: Request, res: Response) => {
+export const getProfile = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError(401, 'Unauthorized');
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
     select: {
@@ -20,9 +24,12 @@ export const getProfile = async (req: Request, res: Response) => {
   });
 };
 
-export const updateProfile = async (req: Request, res: Response) => {
-  const { name, email } = req.body;
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError(401, 'Unauthorized');
+  }
 
+  const { name, email } = req.body;
   const user = await prisma.user.update({
     where: { id: req.user.id },
     data: { name, email },
@@ -41,7 +48,11 @@ export const updateProfile = async (req: Request, res: Response) => {
   });
 };
 
-export const uploadEwaste = async (req: Request, res: Response) => {
+export const uploadEwaste = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError(401, 'Unauthorized');
+  }
+
   const { category, weight } = req.body;
   const image = req.file?.path;
 
@@ -64,7 +75,11 @@ export const uploadEwaste = async (req: Request, res: Response) => {
   });
 };
 
-export const getTransactions = async (req: Request, res: Response) => {
+export const getTransactions = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError(401, 'Unauthorized');
+  }
+
   const transactions = await prisma.transaction.findMany({
     where: { userId: req.user.id },
     include: {
@@ -80,7 +95,11 @@ export const getTransactions = async (req: Request, res: Response) => {
   });
 };
 
-export const getSchedules = async (req: Request, res: Response) => {
+export const getSchedules = async (req: Request, res: Response): Promise<void> => {
+  if (!req.user) {
+    throw new AppError(401, 'Unauthorized');
+  }
+
   const schedules = await prisma.schedule.findMany({
     where: { userId: req.user.id },
     include: {

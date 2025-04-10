@@ -1,31 +1,22 @@
-import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../utils/error';
 
-export class AppError extends Error {
-  statusCode: number;
-  
-  constructor(statusCode: number, message: string) {
-    super(message);
-    this.statusCode = statusCode;
-    Error.captureStackTrace(this, this.constructor);
-  }
-}
-
-export const errorHandler: ErrorRequestHandler = (
+export const errorHandler = (
   err: Error | AppError,
   req: Request,
   res: Response,
   next: NextFunction
-) => {
-  console.error(err);
-
+): void => {
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
+    res.status(err.statusCode).json({
       status: 'error',
       message: err.message
     });
+    return;
   }
 
-  return res.status(500).json({
+  console.error(err);
+  res.status(500).json({
     status: 'error',
     message: 'Internal server error'
   });

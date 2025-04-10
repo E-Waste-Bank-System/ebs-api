@@ -1,38 +1,37 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../config/jwt';
-import prisma from '../config/database';
+import jwt from 'jsonwebtoken';
+import { AppError } from '../utils/error';
 
-export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
+interface JwtPayload {
+  id: string;
+  role: string;
+}
+
+export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
-    
     if (!token) {
-      return res.status(401).json({ message: 'Authentication required' });
+      throw new AppError(401, 'No token provided');
     }
 
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return res.status(401).json({ message: 'Invalid token' });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.id }
-    });
-
-    if (!user) {
-      return res.status(401).json({ message: 'User not found' });
-    }
-
-    req.user = user;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as JwtPayload;
+    req.user = decoded;
     next();
   } catch (error) {
-    return res.status(401).json({ message: 'Authentication failed' });
+    next(new AppError(401, 'Invalid token'));
   }
 };
 
-export const authorizeAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (req.user.role !== 'ADMIN') {
-    return res.status(403).json({ message: 'Access denied' });
-  }
-  next();
+export const authorize = (roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      throw new AppError(401, 'Unauthorized');
+    }
+
+    if (!roles.includes(req.user.role)) {
+      throw new AppError(403, 'Forbidden');
+    }
+
+    next();
+  };
 }; 

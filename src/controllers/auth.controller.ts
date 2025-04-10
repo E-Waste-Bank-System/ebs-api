@@ -2,9 +2,9 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../config/database';
 import { generateToken } from '../config/jwt';
-import { AppError } from '../middlewares/error.middleware';
+import { AppError } from '../utils/error';
 
-export const register = async (req: Request, res: Response) => {
+export const register = async (req: Request, res: Response): Promise<void> => {
   const { name, email, password } = req.body;
 
   const existingUser = await prisma.user.findUnique({
@@ -41,7 +41,7 @@ export const register = async (req: Request, res: Response) => {
   });
 };
 
-export const login = async (req: Request, res: Response) => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
 
   const user = await prisma.user.findUnique({
@@ -73,9 +73,9 @@ export const login = async (req: Request, res: Response) => {
   });
 };
 
-export const getProfile = async (req: Request, res: Response) => {
+export const getProfile = async (req: Request, res: Response): Promise<void> => {
   const user = await prisma.user.findUnique({
-    where: { id: req.user.id },
+    where: { id: req.user?.id },
     select: {
       id: true,
       name: true,

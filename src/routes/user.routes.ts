@@ -28,10 +28,10 @@ const upload = multer({ storage });
 router.use(authenticate);
 
 router.get('/profile', getProfile);
-router.patch('/profile', updateProfile);
+router.put('/profile', updateProfile);
 router.post('/ewaste', upload.single('image'), uploadEwaste);
 router.get('/transactions', getTransactions);
-router.get('/schedule', getSchedules);
-router.patch('/schedule/:id', confirmSchedule);
+router.get('/schedules', getSchedules);
+router.patch('/schedules/:id/confirm', confirmSchedule);
 
 export default router; 

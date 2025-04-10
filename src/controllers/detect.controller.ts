@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { spawn } from 'child_process';
-import { AppError } from '../middlewares/error.middleware';
+import { AppError } from '../utils/error';
 
 export const detectEwaste = async (req: Request, res: Response) => {
   const image = req.file?.path;

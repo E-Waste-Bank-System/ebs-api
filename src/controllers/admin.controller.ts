@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/database';
-import { AppError } from '../middlewares/error.middleware';
+import { AppError } from '../utils/error';
 
 export const getDashboardStats = async (req: Request, res: Response) => {
   const [

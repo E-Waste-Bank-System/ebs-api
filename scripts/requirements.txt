@@ -1,7 +1,0 @@
-numpy>=1.23.0
-opencv-python>=4.8.0
-torch>=2.0.0
-torchvision>=0.15.0
-ultralytics>=8.0.0  # For YOLOv8
-scikit-learn>=1.2.0 # For regression models
-Pillow>=9.0.0 

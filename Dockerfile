@@ -1,34 +1,14 @@
-# Use Node.js base image
-FROM node:18-slim AS node_base
-
-# Install Python and pip
-RUN apt-get update && \
-    apt-get install -y python3 python3-pip && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
-# Create symbolic links for Python
-RUN ln -sf /usr/bin/python3 /usr/bin/python && \
-    ln -sf /usr/bin/pip3 /usr/bin/pip
-
-# Create app directory
+# Dockerfile for EBS API
+FROM node:22-alpine
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package*.json ./
-RUN npm ci
+# Install production dependencies
+COPY package.json package-lock.json ./
+RUN npm install --omit=dev
 
-# Copy the rest of the application
+# Copy source code
 COPY . .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r scripts/requirements.txt
-
-# Build TypeScript code
-RUN npm run build
-
-# Expose the port
-EXPOSE 5000
-
-# Start the application
-CMD ["npm", "start"] 
+# Expose port and start
+EXPOSE 8080
+CMD ["npm", "run", "start"]

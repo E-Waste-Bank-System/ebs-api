@@ -1,50 +1,22 @@
-# Dependencies
+# Node dependencies
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
 # Environment variables
 .env
-.env.local
-.env.*.local
-ebs-cloud-456404-031e8510795a.json
+.env.*
 
-# Build output
-dist/
-build/
-
-# IDE and editor files
-.idea/
-.vscode/
-*.swp
-*.swo
-.DS_Store
+# GCS keyfile
+ebs-cloud-*.json
 
 # Logs
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
 
-# Uploaded files
-public/uploads/
+# VSCode
+.vscode/
 
-# Testing
-coverage/
-
-# Prisma
-.prisma/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-
-# Temporary files
-*.tmp
-*.temp
-.cache/ 
+# OS files
+.DS_Store
+Thumbs.db

@@ -6,11 +6,11 @@ async function seed() {
   console.log('Seeding database...');
 
   // Admin
-  const adminPassword = 'adminpass';
+  const adminPassword = 'ebskesandung';
   const password_hash = await bcrypt.hash(adminPassword, 10);
   const { error: adminError } = await supabase.from('admins').insert([{
     id: uuidv4(),
-    email: 'admin@example.com',
+    email: 'ebs@admin.com',
     password_hash,
   }]);
   if (adminError) console.error('Admin seed error:', adminError.message);
@@ -22,15 +22,15 @@ async function seed() {
       id: uuidv4(),
       title: 'Welcome to EBS',
       content: 'This is the first article on E-Waste Bank System.',
-      imageUrl: 'https://via.placeholder.com/300',
-      createdAt: new Date().toISOString(),
+      image_url: 'https://via.placeholder.com/300',
+      created_at: new Date().toISOString(),
     },
     {
       id: uuidv4(),
       title: 'Recycling Tips',
       content: 'Here are some tips to recycle your electronics safely.',
-      imageUrl: 'https://via.placeholder.com/300',
-      createdAt: new Date().toISOString(),
+      image_url: 'https://via.placeholder.com/300',
+      created_at: new Date().toISOString(),
     },
   ];
   const { error: articleError } = await supabase.from('articles').insert(articles);
@@ -41,27 +41,27 @@ async function seed() {
   const requests = [
     {
       id: uuidv4(),
-      userId: 'user-123',
+      user_id: 'user-123',
       category: 'electronic',
       weight: 2.5,
       price: 10,
       status: 'approved',
-      pickupDate: new Date().toISOString(),
+      pickup_date: new Date().toISOString(),
       location: 'Jakarta',
-      imageUrl: 'https://via.placeholder.com/300',
-      createdAt: new Date().toISOString(),
+      image_url: 'https://via.placeholder.com/300',
+      created_at: new Date().toISOString(),
     },
     {
       id: uuidv4(),
-      userId: 'user-456',
+      user_id: 'user-456',
       category: 'battery',
       weight: 1.2,
       price: 5,
       status: 'pending',
-      pickupDate: new Date().toISOString(),
+      pickup_date: new Date().toISOString(),
       location: 'Bandung',
-      imageUrl: 'https://via.placeholder.com/300',
-      createdAt: new Date().toISOString(),
+      image_url: 'https://via.placeholder.com/300',
+      created_at: new Date().toISOString(),
     },
   ];
   const { error: requestError } = await supabase.from('requests').insert(requests);

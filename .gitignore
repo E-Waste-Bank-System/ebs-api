@@ -8,6 +8,8 @@ node_modules/
 # GCS keyfile
 ebs-cloud-*.json
 
+summary.txt
+
 # Logs
 logs/
 *.log

@@ -1,12 +1,13 @@
 # Node dependencies
 node_modules/
+dist/
 
 # Environment variables
 .env
 .env.*
 
 # GCS keyfile
-ebs-cloud-*.json
+*.json
 
 summary.txt
 

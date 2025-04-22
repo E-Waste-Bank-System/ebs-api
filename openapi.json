@@ -7,12 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:8080/api",
-      "description": "Development server"
-    },
-    {
-      "url": "https://ebs-api-981332637673.asia-southeast2.run.app/api",
-      "description": "Production server"
+      "url": "http://localhost:8080/api"
     }
   ],
   "paths": {
@@ -798,20 +793,7 @@
         },
         "required": ["estimatedPrice"]
       }
-    },
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
     }
   },
-  "tags": [
-    { "name": "Articles" },
-    { "name": "Requests" },
-    { "name": "Auth" },
-    { "name": "AI" },
-    { "name": "Reports" }
-  ]
+  "tags": []
 }

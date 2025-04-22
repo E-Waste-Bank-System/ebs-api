@@ -22,7 +22,7 @@ function fromDbArticle(db: any): Article {
     title: db.title,
     content: db.content,
     imageUrl: db.image_url,
-    createdAt: db.created_at,
+    createdAt: db.created_at ? new Date(db.created_at).toISOString() : "",
   };
 }
 
@@ -44,9 +44,14 @@ export async function getById(id: string): Promise<Article> {
   return fromDbArticle(data);
 }
 
-export async function create(article: Article): Promise<Article> {
-  const { data, error } = await supabase.from('articles').insert(toDbArticle(article)).single();
+export async function create(article: Partial<Article>): Promise<Article> {
+  // Insert and try to get the full row
+  const { data, error } = await supabase.from('articles').insert(toDbArticle(article)).select().single();
   if (error) throw error;
+  // If data is null, fetch by id
+  if (!data) {
+    return await getById(article.id!);
+  }
   return fromDbArticle(data);
 }
 

@@ -55,6 +55,7 @@ export const createRequest: RequestHandler = async (req: AuthRequest, res, next)
       `${uuidv4()}_${req.file.originalname}`,
       req.file.mimetype
     );
+    // Do not set createdAt, let DB handle it
     const newReq = await requestService.createRequest({
       id: uuidv4(),
       userId: req.user.id,
@@ -62,8 +63,7 @@ export const createRequest: RequestHandler = async (req: AuthRequest, res, next)
       location,
       pickupDate,
       imageUrl,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
+      status: 'pending'
     });
     res.status(201).json(newReq);
   } catch (err) {

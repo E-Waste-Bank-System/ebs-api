@@ -5,7 +5,8 @@ import { uploadImage } from '../utils/gcs';
 
 export const getAll: RequestHandler = async (req, res, next) => {
   try {
-    const { limit = 10, offset = 0 } = req.query as any;
+    // Use validatedQuery if available, fallback to req.query
+    const { limit = 10, offset = 0 } = (req as any).validatedQuery || req.query;
     const { data, total } = await articleService.getAll(Number(limit), Number(offset));
     res.json({ data, total });
   } catch (err) {

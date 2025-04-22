@@ -11,7 +11,7 @@ const validateQuery = (schema: AnyZodObject) => (
     res.status(400).json({ errors: result.error.format() });
     return;
   }
-  req.query = result.data;
+  (req as any).validatedQuery = result.data;
   next();
 };
 

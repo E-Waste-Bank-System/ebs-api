@@ -16,10 +16,12 @@ const PORT = Number(env.PORT) || 8080;
 import authRoutes from './routes/auth';
 import articleRoutes from './routes/article';
 import requestRoutes from './routes/request';
+import reportRoutes from './routes/report';
 import apiLimiter from './middlewares/rateLimiter';
 import swaggerUi from 'swagger-ui-express';
 import swaggerJsDoc from 'swagger-jsdoc';
 import errorHandler from './middlewares/errorHandler';
+import { report } from 'process';
 
 const app = express();
 
@@ -49,6 +51,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/requests', requestRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Swagger docs
 let swaggerSpec;

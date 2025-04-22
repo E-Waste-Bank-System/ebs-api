@@ -6,7 +6,7 @@ dist/
 .env
 .env.*
 
-# GCS keyfile
+# # GCS keyfile
 *.json
 
 summary.txt

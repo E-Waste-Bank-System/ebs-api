@@ -6,6 +6,8 @@ import requestId from './middlewares/requestId';
 import corsMiddleware from './middlewares/cors';
 import cookieParser from 'cookie-parser';
 import sanitizeBody from './middlewares/sanitize';
+import fs from 'fs';
+import path from 'path';
 
 import env from './config/env';
 // Define server port before usage
@@ -47,97 +49,32 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/requests', requestRoutes);
+
 // Swagger docs
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'E-Waste Bank System API',
-      version: '1.0.0',
-      description: 'API documentation for E-Waste Bank System',
+let swaggerSpec;
+if (process.env.NODE_ENV === 'production') {
+  // Serve static openapi.json in production
+  swaggerSpec = JSON.parse(fs.readFileSync(path.join(__dirname, '../openapi.json'), 'utf8'));
+  // Dynamically set the servers URL for production
+  swaggerSpec.servers = [
+    { url: 'https://ebs-api-981332637673.asia-southeast2.run.app/' }
+  ];
+} else {
+  // Use swagger-jsdoc in development
+  const swaggerOptions = {
+    definition: {
+      openapi: '3.0.0',
+      info: {
+        title: 'E-Waste Bank System API',
+        version: '1.0.0',
+        description: 'API documentation for E-Waste Bank System',
+      },
+      servers: [{ url: `http://localhost:${process.env.PORT || 5000}/` }],
     },
-    servers: [{ url: `http://localhost:${PORT}/api` }],
-    tags: [
-      { name: 'Auth', description: 'Authentication endpoints' },
-      { name: 'Articles', description: 'Article management endpoints' },
-      { name: 'Requests', description: 'E-waste request endpoints' },
-      { name: 'AI', description: 'AI inference and estimation' },
-      { name: 'Reports', description: 'Reporting endpoints' }
-    ],
-    components: {
-      schemas: {
-        Article: {
-          type: 'object',
-          required: ['id', 'title', 'content', 'imageUrl', 'createdAt'],
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            title: { type: 'string' },
-            content: { type: 'string' },
-            imageUrl: { type: 'string', format: 'uri' },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
-        },
-        EWasteRequest: {
-          type: 'object',
-          required: ['id', 'userId', 'weight', 'status', 'imageUrl', 'createdAt'],
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            userId: { type: 'string', format: 'uuid' },
-            category: { type: 'string' },
-            weight: { type: 'number' },
-            price: { type: 'number' },
-            status: { type: 'string', enum: ['pending', 'approved', 'rejected'] },
-            pickupDate: { type: 'string', format: 'date-time' },
-            location: { type: 'string' },
-            imageUrl: { type: 'string', format: 'uri' },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
-        },
-        ErrorResponse: {
-          type: 'object',
-          properties: {
-            message: { type: 'string' }
-          }
-        },
-        MessageResponse: {
-          type: 'object',
-          properties: {
-            message: { type: 'string' }
-          }
-        },
-        LoginRequest: {
-          type: 'object',
-          required: ['email', 'password'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 6 }
-          }
-        },
-        InferenceResponse: { type: 'object' },
-        EstimateResponse: { type: 'object' },
-        SignupRequest: {
-          type: 'object',
-          required: ['email', 'password', 'name'],
-          properties: {
-            email: { type: 'string', format: 'email' },
-            password: { type: 'string', minLength: 6 },
-            name: { type: 'string' }
-          }
-        },
-        UserProfile: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            name: { type: 'string' },
-            role: { type: 'string' }
-          }
-        }
-      }
-    }
-  },
-  apis: ['./src/routes/*.ts'],
-};
-const swaggerSpec = swaggerJsDoc(swaggerOptions);
+    apis: ['./src/routes/*.ts'],
+  };
+  swaggerSpec = swaggerJsDoc(swaggerOptions);
+}
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Error handling middleware

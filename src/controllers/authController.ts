@@ -13,8 +13,8 @@ export const login: RequestHandler = async (
     const { email, password } = req.body;
     const user = await authService.login(email, password);
     const token = signToken({ id: user.id, email: user.email });
-    res.cookie('token', token, { httpOnly: true, sameSite: 'strict' });
-    res.json({ message: 'Login successful' });
+    res.cookie('token', token, { httpOnly: true, sameSite: 'none', secure: true });
+    res.json({ message: 'Login successful', token });
   } catch (err) {
     next(err);
   }

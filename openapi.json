@@ -7,7 +7,12 @@
   },
   "servers": [
     {
-      "url": "http://localhost:5000/api"
+      "url": "http://localhost:8080/api",
+      "description": "Development server"
+    },
+    {
+      "url": "https://ebs-api-981332637673.asia-southeast2.run.app/api",
+      "description": "Production server"
     }
   ],
   "paths": {
@@ -709,6 +714,104 @@
       }
     }
   },
-  "components": {},
-  "tags": []
+  "components": {
+    "schemas": {
+      "Article": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "title": { "type": "string" },
+          "content": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "title", "content", "imageUrl", "createdAt"]
+      },
+      "EWasteRequest": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "userId": { "type": "string" },
+          "category": { "type": "string" },
+          "weight": { "type": "number" },
+          "price": { "type": "number" },
+          "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+          "pickupDate": { "type": "string", "format": "date-time" },
+          "location": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "userId", "weight", "status", "imageUrl", "createdAt"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        },
+        "required": ["email", "password"]
+      },
+      "SignupRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" },
+          "name": { "type": "string" }
+        },
+        "required": ["email", "password", "name"]
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "role": { "type": "string" }
+        },
+        "required": ["id", "name", "role"]
+      },
+      "MessageResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        },
+        "required": ["message"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" }
+        },
+        "required": ["message"]
+      },
+      "InferenceResponse": {
+        "type": "object",
+        "properties": {
+          "result": { "type": "string" },
+          "confidence": { "type": "number" }
+        },
+        "required": ["result", "confidence"]
+      },
+      "EstimateResponse": {
+        "type": "object",
+        "properties": {
+          "estimatedPrice": { "type": "number" }
+        },
+        "required": ["estimatedPrice"]
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "tags": [
+    { "name": "Articles" },
+    { "name": "Requests" },
+    { "name": "Auth" },
+    { "name": "AI" },
+    { "name": "Reports" }
+  ]
 }

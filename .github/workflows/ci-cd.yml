@@ -75,10 +75,11 @@ jobs:
         id: auth
         uses: 'google-github-actions/auth@v2'
         with:
-          token_format: 'access_token'
+        #   token_format: 'access_token'
           project_id: 'ebs-cloud-456404'
-          workload_identity_provider: 'projects/981332637673/locations/global/workloadIdentityPools/github-actions-cloud-run/providers/github' # e.g. - projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider
+        #   workload_identity_provider: 'projects/981332637673/locations/global/workloadIdentityPools/github-actions-cloud-run/providers/github' # e.g. - projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider
           service_account: 'ebs-service@ebs-cloud-456404.iam.gserviceaccount.com' # e.g. - my-service-account@my-project.iam.gserviceaccount.com
+          credentials_json: '${{ secrets.GCS_KEYFILE}}' # NOTE: This is optional if using workload identity federation
 
       # NOTE: Alternative option - authentication via credentials json
       # - name: Google Auth

@@ -8,6 +8,8 @@
     "dev": "nodemon src/app.ts",
     "start": "node dist/app.js",
     "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint 'src/**/*.ts'",
     "seed": "ts-node src/seed.ts",
     "generate:openapi": "ts-node src/utils/generateOpenApi.ts"
   },

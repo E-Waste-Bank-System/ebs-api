@@ -4,10 +4,13 @@ dist/
 
 # Environment variables
 .env
-.env.*
+# .env.*
+# Ignore environment file and GCP key
+ebs-cloud-*.json
+!openapi.json
 
 # # GCS keyfile
-*.json
+# *.json
 
 summary.txt
 

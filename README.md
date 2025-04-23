@@ -82,7 +82,6 @@ gcloud run deploy ebs-api --image=$REGION-docker.pkg.dev/$GCP_PROJECT/$CLOUD_RUN
 Store API keys and credentials in GitHub Secrets and inject them at deploy time. Do not commit sensitive files (e.g. service account JSON or `.env`). In Cloud Run, you can also mount secrets via Secret Manager instead of plain env vars.
 
 ## Logging & Monitoring
-
 Cloud Run integrates with Cloud Logging and Error Reporting by default. Check logs in the GCP Console under Cloud Run → Logs. Configure alerts and metrics in Cloud Monitoring as needed.
 
 ## License

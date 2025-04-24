@@ -7,21 +7,37 @@ interface AdminRecord {
   password_hash: string;
 }
 
+interface UserRecord {
+  id: string;
+  email: string;
+  password_hash: string;
+  // tambahkan field lain jika perlu
+}
+
 export async function login(email: string, password: string) {
-  const { data, error } = await supabase
+  // Cek di tabel admins
+  let { data, error } = await supabase
     .from('admins')
     .select('id, email, password_hash')
     .eq('email', email)
     .single();
 
-  if (error || !data) {
-    throw Object.assign(new Error('Invalid email or password'), { status: 401 });
+  if (!error && data) {
+    const isValid = await bcrypt.compare(password, data.password_hash);
+    if (isValid) {
+      return { id: data.id, email: data.email, role: 'admin' };
+    }
   }
 
-  const isValid = await bcrypt.compare(password, data.password_hash);
-  if (!isValid) {
-    throw Object.assign(new Error('Invalid email or password'), { status: 401 });
+  // Jika tidak ditemukan di admins, cek ke Supabase Auth
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (!authError && authData?.user) {
+    return { id: authData.user.id, email: authData.user.email, role: 'user' };
   }
 
-  return { id: data.id, email: data.email };
+  throw Object.assign(new Error('Invalid email or password'), { status: 401 });
 }

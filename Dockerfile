@@ -39,4 +39,5 @@ COPY --from=builder /app/dist ./dist
 COPY openapi.json ./
 
 EXPOSE 8080
-ENTRYPOINT ["/bin/sh","-c","echo \"$GCS_KEYFILE\" > /app/key.json && npm start"]
+# Use printf for safer writing of the keyfile content
+ENTRYPOINT ["/bin/sh","-c","printf '%s' \"$GCS_KEYFILE\" > /app/key.json && npm start"]

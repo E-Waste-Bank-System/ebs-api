@@ -1,17 +1,22 @@
 # syntax=docker/dockerfile:1
 
+# 1. Build stage
 FROM node:22-alpine AS builder
 WORKDIR /app
-
-# Install dependencies
-COPY package.json package-lock.json ./
-RUN npm install
-
-# Copy source and build
-COPY . .
+COPY package*.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+COPY config ./config
+COPY middlewares ./middlewares
+COPY controllers ./controllers
+COPY routes ./routes
+COPY services ./services
+COPY utils ./utils
+COPY types ./types
 RUN npm run build
 
-# Production image
+# 2. Production stage
 FROM node:22-alpine
 WORKDIR /app
 
@@ -36,8 +41,6 @@ RUN npm install --omit=dev
 
 # Copy built files and necessary assets
 COPY --from=builder /app/dist ./dist
-COPY openapi.json ./
-
 EXPOSE 8080
 # Use printf for safer writing of the keyfile content
 ENTRYPOINT ["/bin/sh","-c","printf '%s' \"$GCS_KEYFILE\" > /app/key.json && npm start"]

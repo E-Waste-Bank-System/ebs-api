@@ -1,4 +1,5 @@
 import { Storage, StorageOptions } from '@google-cloud/storage';
+import { Storage, StorageOptions } from '@google-cloud/storage';
 import env from '../config/env';
 import logger from './logger'; // Import logger
 
@@ -25,8 +26,11 @@ export async function uploadImage(
   filename: string,
   contentType: string
 ): Promise<string> {
+  logger.info(`Uploading file ${filename} to bucket ${env.gcsBucket}`);
   const file = bucket.file(filename);
   await file.save(buffer, { contentType });
   await file.makePublic();
-  return `https://storage.googleapis.com/${env.GCS_BUCKET}/${filename}`;
+  const publicUrl = `https://storage.googleapis.com/${env.gcsBucket}/${filename}`;
+  logger.info(`Upload complete: ${publicUrl}`);
+  return publicUrl;
 }

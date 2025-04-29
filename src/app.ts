@@ -25,6 +25,9 @@ import { report } from 'process';
 
 const app = express();
 
+// Trust the first hop (Cloud Run proxy)
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 // Sanitize request body data

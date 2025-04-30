@@ -19,7 +19,6 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 # Set environment variables
 ENV NODE_ENV=production
-# No need for GOOGLE_APPLICATION_CREDENTIALS as we're using default authentication
 
 EXPOSE 8080
 ENV PORT 8080

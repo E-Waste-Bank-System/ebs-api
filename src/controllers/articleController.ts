@@ -36,6 +36,8 @@ export const getById: RequestHandler = async (req, res, next) => {
 
 export const createArticle: RequestHandler = async (req, res, next) => {
   try {
+    logger.debug('createArticle req.file:', req.file);
+    logger.debug('createArticle req.body:', req.body);
     if (!req.file) {
       res.status(400).json({ message: 'Image file is required' });
       return;
@@ -68,6 +70,8 @@ export const createArticle: RequestHandler = async (req, res, next) => {
 
 export const updateArticle: RequestHandler = async (req, res, next) => {
   try {
+    logger.debug('updateArticle req.file:', req.file);
+    logger.debug('updateArticle req.body:', req.body);
     const fields: any = { ...req.body };
     if (req.file) {
       // Use safe filename generation

@@ -1,17 +1,14 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
+import { RequestHandler } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadImage } from '../utils/gcs';
 import * as requestService from '../services/requestService';
+import { uploadImage } from '../utils/gcs';
 import { AuthRequest } from '../middlewares/auth';
+import { Response, NextFunction } from 'express';
 
-// Admin handlers
 export const getAllRequests: RequestHandler = async (req, res, next) => {
   try {
-    const { limit = 10, offset = 0 } = req.query as any;
-    const { data, total } = await requestService.getAllRequests(
-      Number(limit),
-      Number(offset)
-    );
+    const { limit = 10, offset = 0 } = (req as any).query;
+    const { data, total } = await requestService.getAllRequests(Number(limit), Number(offset));
     res.json({ data, total });
   } catch (err) {
     next(err);
@@ -20,10 +17,7 @@ export const getAllRequests: RequestHandler = async (req, res, next) => {
 
 export const approveRequest: RequestHandler = async (req, res, next) => {
   try {
-    const updated = await requestService.updateRequestStatus(
-      req.params.id,
-      'approved'
-    );
+    const updated = await requestService.updateRequestStatus(req.params.id, 'approved');
     res.json(updated);
   } catch (err) {
     next(err);
@@ -32,30 +26,21 @@ export const approveRequest: RequestHandler = async (req, res, next) => {
 
 export const rejectRequest: RequestHandler = async (req, res, next) => {
   try {
-    const updated = await requestService.updateRequestStatus(
-      req.params.id,
-      'rejected'
-    );
+    const updated = await requestService.updateRequestStatus(req.params.id, 'rejected');
     res.json(updated);
   } catch (err) {
     next(err);
   }
-};
+}
 
-// User handlers
-export const createRequest: RequestHandler = async (req: AuthRequest, res, next) => {
+export async function createRequest(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     if (!req.file) {
       res.status(400).json({ message: 'Image file is required' });
       return;
     }
+    const imageUrl = await uploadImage(req.file.buffer, `${uuidv4()}_${req.file.originalname}`, req.file.mimetype);
     const { weight, location, pickupDate } = req.body;
-    const imageUrl = await uploadImage(
-      req.file.buffer,
-      `${uuidv4()}_${req.file.originalname}`,
-      req.file.mimetype
-    );
-    // Do not set createdAt, let DB handle it
     const newReq = await requestService.createRequest({
       id: uuidv4(),
       userId: req.user.id,
@@ -69,14 +54,13 @@ export const createRequest: RequestHandler = async (req: AuthRequest, res, next)
   } catch (err) {
     next(err);
   }
-};
+}
 
-export const getUserRequests: RequestHandler = async (req: AuthRequest, res, next) => {
+export async function getUserRequests(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const userId = req.user.id;
-    const requests = await requestService.getRequestsByUser(userId);
-    res.json(requests);
+    const data = await requestService.getRequestsByUser(req.user.id);
+    res.json(data);
   } catch (err) {
     next(err);
   }
-};
+}

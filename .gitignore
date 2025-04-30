@@ -1,28 +1,25 @@
-# Node dependencies
+# Node modules
 node_modules/
+
+# Build output
 dist/
 
-# Environment variables
+# Environment files
 .env
-# .env.*
-# Ignore environment file and GCP key
 ebs-cloud-*.json
-!openapi.json
-
-# # GCS keyfile
-# *.json
-
-summary.txt
 
 # Logs
 logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
 
 # VSCode
 .vscode/
 
-# OS files
-.DS_Store
-Thumbs.db
+# Temporary files
+*.tmp

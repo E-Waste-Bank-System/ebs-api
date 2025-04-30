@@ -1,58 +1,47 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
-import * as authService from '../services/authService';
+import { Request, Response, NextFunction } from 'express';
+import { registerUser, authenticateUser, User, loginWithGoogle, authenticateAdmin } from '../services/authService';
 import { signToken } from '../utils/token';
-import * as userService from '../services/userService';
-import supabase from '../config/supabase';
 
-export const login: RequestHandler = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export async function register(req: Request, res: Response, next: NextFunction) {
   try {
     const { email, password } = req.body;
-    const user = await authService.login(email, password);
-    const token = signToken({ id: user.id, email: user.email });
-    res.cookie('token', token, { httpOnly: true, sameSite: 'none', secure: true });
-    res.json({ message: 'Login successful', token });
+    const user: User = await registerUser(email, password);
+    const token = signToken({ id: user.id });
+    res.status(201).json({ user: { id: user.id, email: user.email }, token });
   } catch (err) {
     next(err);
   }
-};
+}
 
-export const logout: RequestHandler = (
-  _req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export async function login(req: Request, res: Response, next: NextFunction) {
   try {
-    res.clearCookie('token');
-    res.json({ message: 'Logged out' });
+    const { email, password } = req.body;
+    const user: User = await authenticateUser(email, password);
+    const token = signToken({ id: user.id });
+    res.json({ user: { id: user.id, email: user.email }, token });
   } catch (err) {
     next(err);
   }
-};
+}
 
-export const signup: RequestHandler = async (req, res, next) => {
+export async function loginWithGoogleHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const { email, password, name } = req.body;
-    const user = await userService.signup(email, password, name);
-    res.status(201).json({ message: 'Signup successful', user });
+    const { idToken } = req.body;
+    const user = await loginWithGoogle(idToken);
+    const token = signToken({ id: user.id });
+    res.json({ user: { id: user.id, email: user.email, provider: user.provider }, token });
   } catch (err) {
     next(err);
   }
-};
+}
 
-export const profile: RequestHandler = async (req: any, res, next) => {
+export async function loginAdmin(req: Request, res: Response, next: NextFunction) {
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, name, role')
-      .eq('id', req.user.id)
-      .single();
-    if (error) throw Object.assign(new Error(error.message), { status: 404 });
-    res.json(data);
+    const { email, password } = req.body;
+    const user = await authenticateAdmin(email, password);
+    const token = signToken({ id: user.id });
+    res.json({ user: { id: user.id, email: user.email }, token });
   } catch (err) {
     next(err);
   }
-};
+}

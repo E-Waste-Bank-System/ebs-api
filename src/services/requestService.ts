@@ -1,74 +1,51 @@
-import supabase from '../config/supabase';
-import { EWasteRequest } from '../models/request';
+import supabase from '../utils/supabase';
 
-function toDbRequest(request: Partial<EWasteRequest>) {
-  const mapped: any = { ...request };
-  if ('userId' in mapped) {
-    mapped.user_id = mapped.userId;
-    delete mapped.userId;
-  }
-  if ('pickupDate' in mapped) {
-    mapped.pickup_date = mapped.pickupDate;
-    delete mapped.pickupDate;
-  }
-  if ('imageUrl' in mapped) {
-    mapped.image_url = mapped.imageUrl;
-    delete mapped.imageUrl;
-  }
-  if ('createdAt' in mapped) {
-    delete mapped.createdAt;
-  }
-  return mapped;
+export interface EWasteRequest {
+  id: string;
+  userId: string;
+  weight: number;
+  location: string;
+  pickupDate?: string;
+  imageUrl: string;
+  status: string;
+  createdAt: string;
 }
 
-function fromDbRequest(db: any): EWasteRequest {
-  return {
-    id: db.id,
-    userId: db.user_id,
-    category: db.category,
-    weight: db.weight,
-    price: db.price,
-    status: db.status,
-    pickupDate: db.pickup_date,
-    location: db.location,
-    imageUrl: db.image_url,
-    createdAt: db.created_at,
-  };
-}
-
-export async function getAllRequests(
-  limit: number,
-  offset: number
-): Promise<{ data: EWasteRequest[]; total: number }> {
-  const { data, error, count } = await supabase
+export async function getAllRequests(limit: number, offset: number) {
+  const { data, count, error } = await supabase
     .from('requests')
     .select('*', { count: 'exact' })
-    .range(offset, offset + limit - 1);
+    .order('createdAt', { ascending: false })
+    .limit(limit, { offset });
   if (error) throw error;
-  return { data: (data || []).map(fromDbRequest), total: count || 0 };
+  return { data: data || [], total: count || 0 };
 }
 
-export async function getRequestsByUser(userId: string): Promise<EWasteRequest[]> {
-  const { data, error } = await supabase.from('requests').select('*').eq('user_id', userId);
+export async function getRequestsByUser(userId: string) {
+  const { data, error } = await supabase
+    .from('requests')
+    .select('*')
+    .eq('userId', userId)
+    .order('createdAt', { ascending: false });
   if (error) throw error;
-  return (data || []).map(fromDbRequest);
+  return data || [];
 }
 
-export async function createRequest(request: Partial<EWasteRequest>): Promise<EWasteRequest> {
-  const { data, error } = await supabase.from('requests').insert(toDbRequest(request)).select().single();
+export async function createRequest(request: Omit<EWasteRequest, 'createdAt'>) {
+  const { data, error } = await supabase
+    .from('requests')
+    .insert(request)
+    .single();
   if (error) throw error;
-  return fromDbRequest(data);
+  return data;
 }
 
-export async function updateRequestStatus(
-  id: string,
-  status: 'approved' | 'rejected'
-): Promise<EWasteRequest> {
+export async function updateRequestStatus(id: string, status: string) {
   const { data, error } = await supabase
     .from('requests')
     .update({ status })
     .eq('id', id)
     .single();
   if (error) throw error;
-  return fromDbRequest(data);
+  return data;
 }

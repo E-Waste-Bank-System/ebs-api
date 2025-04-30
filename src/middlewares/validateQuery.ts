@@ -1,18 +1,14 @@
 import { AnyZodObject } from 'zod';
-import { Request, Response, NextFunction } from 'express';
+import { RequestHandler } from 'express';
 
-const validateQuery = (schema: AnyZodObject) => (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const result = schema.safeParse(req.query);
-  if (!result.success) {
-    res.status(400).json({ errors: result.error.format() });
-    return;
-  }
-  (req as any).validatedQuery = result.data;
-  next();
-};
-
-export default validateQuery;
+export default function validateQuery(schema: AnyZodObject): RequestHandler {
+  return (req, res, next) => {
+    try {
+      req.query = schema.parse(req.query);
+      next();
+    } catch (err: any) {
+      res.status(400).json({ message: err.errors || err.message });
+      return;
+    }
+  };
+}

@@ -1,91 +1,51 @@
 import express from 'express';
-import morgan from 'morgan';
-import logger, { stream } from './utils/logger';
 import helmet from 'helmet';
-import requestId from './middlewares/requestId';
-import corsMiddleware from './middlewares/cors';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import mongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
-import sanitizeBody from './middlewares/sanitize';
-import fs from 'fs';
-import path from 'path';
-
+import swaggerJSDoc from 'swagger-jsdoc';
+import swaggerUI from 'swagger-ui-express';
 import env from './config/env';
-// Define server port before usage
-const PORT = Number(env.PORT) || 8080;
-
+import logger from './utils/logger';
+import errorHandler from './middlewares/errorHandler';
+import sanitize from './middlewares/sanitize';
+// Route imports
 import authRoutes from './routes/auth';
 import articleRoutes from './routes/article';
 import requestRoutes from './routes/request';
 import reportRoutes from './routes/report';
-import apiLimiter from './middlewares/rateLimiter';
-import swaggerUi from 'swagger-ui-express';
-import swaggerJsDoc from 'swagger-jsdoc';
-import errorHandler from './middlewares/errorHandler';
-import { report } from 'process';
+import proxyRoutes from './routes/proxy';
 
 const app = express();
 
-// Trust the first hop (Cloud Run proxy)
-app.set('trust proxy', 1);
-
-// Security headers
+// Security
 app.use(helmet());
-// Sanitize request body data
-app.use(sanitizeBody);
-// Assign unique request IDs
-app.use(requestId);
-// Middleware
-app.use(corsMiddleware);
-// Rate limiting
-app.use('/api', apiLimiter);
-// HTTP request logging
-// Cast options as any due to type overload issue
-app.use(morgan('combined', { stream } as any));
+app.use(cors({ origin: env.clientOrigin || '*', credentials: true }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+app.use(mongoSanitize());
+app.use(sanitize);
+
+// Parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// Swagger setup
+const swaggerSpec = swaggerJSDoc({
+  definition: { openapi: '3.0.0', info: { title: 'E-Waste Bank API', version: '1.0.0' } },
+  apis: ['./src/routes/*.ts'],
 });
+app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 
-// Register routes
+// Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/proxy', proxyRoutes);
 
-// Swagger docs
-let swaggerSpec;
-if (process.env.NODE_ENV === 'production') {
-  // Serve static openapi.json in production
-  swaggerSpec = JSON.parse(fs.readFileSync(path.join(__dirname, '../openapi.json'), 'utf8'));
-  // Dynamically set the servers URL for production
-  swaggerSpec.servers = [
-    { url: 'https://ebs-api-981332637673.asia-southeast2.run.app/' }
-  ];
-} else {
-  // Use swagger-jsdoc in development
-  const swaggerOptions = {
-    definition: {
-      openapi: '3.0.0',
-      info: {
-        title: 'E-Waste Bank System API',
-        version: '1.0.0',
-        description: 'API documentation for E-Waste Bank System',
-      },
-      servers: [{ url: `http://localhost:${process.env.PORT}/` }],
-    },
-    apis: ['./src/routes/*.ts'],
-  };
-  swaggerSpec = swaggerJsDoc(swaggerOptions);
-}
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-// Error handling middleware
+// Error handling
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+export default app;

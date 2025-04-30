@@ -1,11 +1,12 @@
-import supabase from '../config/supabase';
-import { EWasteRequest } from '../models/request';
+import supabase from '../utils/supabase';
+import { EWasteRequest } from './requestService';
 
-export async function getReports(): Promise<EWasteRequest[]> {
+export async function getApprovedRequests(): Promise<EWasteRequest[]> {
   const { data, error } = await supabase
     .from('requests')
     .select('*')
-    .eq('status', 'approved');
+    .eq('status', 'approved')
+    .order('createdAt', { ascending: false });
   if (error) throw error;
-  return data as EWasteRequest[];
+  return data || [];
 }

@@ -1,43 +1,64 @@
-import supabase from '../config/supabase';
+import supabase from '../utils/supabase';
 import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 
-interface AdminRecord {
+export interface User {
   id: string;
   email: string;
-  password_hash: string;
+  password?: string;
+  provider?: 'email' | 'google';
+  googleId?: string;
+  isAdmin?: boolean;
 }
 
-interface UserRecord {
-  id: string;
-  email: string;
-  password_hash: string;
-  // tambahkan field lain jika perlu
+export async function registerUser(email: string, password: string): Promise<User> {
+  const hashed = await bcrypt.hash(password, 10);
+  const newUser: User = { id: uuidv4(), email, password: hashed };
+  const { data, error } = await supabase.from('users').insert(newUser).single();
+  if (error) throw error;
+  return data;
 }
 
-export async function login(email: string, password: string) {
-  // Cek di tabel admins
-  let { data, error } = await supabase
-    .from('admins')
-    .select('id, email, password_hash')
+export async function authenticateUser(email: string, password: string): Promise<User> {
+  const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
+  if (error || !data) throw new Error('Invalid email or password');
+  const match = await bcrypt.compare(password, data.password);
+  if (!match) throw new Error('Invalid email or password');
+  return { id: data.id, email: data.email, password: data.password };
+}
+
+export async function authenticateAdmin(email: string, password: string): Promise<User> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
     .eq('email', email)
+    .eq('isAdmin', true)
     .single();
+  if (error || !data) throw new Error('Invalid admin credentials');
+  const match = await bcrypt.compare(password, data.password!);
+  if (!match) throw new Error('Invalid admin credentials');
+  return data;
+}
 
-  if (!error && data) {
-    const isValid = await bcrypt.compare(password, data.password_hash);
-    if (isValid) {
-      return { id: data.id, email: data.email, role: 'admin' };
-    }
-  }
+/**
+ * Perform Google authentication: verify ID token, upsert user
+ */
+import { OAuth2Client } from 'google-auth-library';
+import env from '../config/env';
+// Initialize Google OAuth2Client with client ID for audience validation
+const googleClient = new OAuth2Client(env.googleClientId);
 
-  // Jika tidak ditemukan di admins, cek ke Supabase Auth
-  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (!authError && authData?.user) {
-    return { id: authData.user.id, email: authData.user.email, role: 'user' };
-  }
-
-  throw Object.assign(new Error('Invalid email or password'), { status: 401 });
+export async function loginWithGoogle(idToken: string): Promise<User> {
+  const ticket = await googleClient.verifyIdToken({ idToken, audience: env.googleClientId });
+  const payload = ticket.getPayload();
+  if (!payload || !payload.sub || !payload.email) throw new Error('Invalid Google token');
+  // check existing by googleId
+  const { data, error } = await supabase.from('users').select('*').eq('googleId', payload.sub).single();
+  if (error && error.code !== 'PGRST116') throw error; // ignore not found
+  if (data) return { ...data };
+  // insert new user
+  const newUser = { id: uuidv4(), email: payload.email, provider: 'google', googleId: payload.sub };
+  const insert = await supabase.from('users').insert(newUser).single();
+  if (insert.error) throw insert.error;
+  return insert.data;
 }

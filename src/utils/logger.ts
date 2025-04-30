@@ -4,15 +4,11 @@ const logger = createLogger({
   level: 'info',
   format: format.combine(
     format.timestamp(),
+    format.errors({ stack: true }),
     format.json()
   ),
+  defaultMeta: { service: 'ebs-api' },
   transports: [new transports.Console()],
 });
-
-export const stream = {
-  write: (message: string) => {
-    logger.info(message.trim());
-  },
-};
 
 export default logger;

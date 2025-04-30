@@ -1,10 +1,10 @@
 import { RequestHandler } from 'express';
 import * as reportService from '../services/reportService';
 
-export const getReports: RequestHandler = async (_req, res, next) => {
+export const getReports: RequestHandler = async (req, res, next) => {
   try {
-    const reports = await reportService.getReports();
-    res.json(reports);
+    const data = await reportService.getApprovedRequests();
+    res.json(data);
   } catch (err) {
     next(err);
   }

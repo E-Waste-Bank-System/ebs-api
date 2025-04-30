@@ -1,67 +1,56 @@
-import supabase from '../config/supabase';
-import { Article } from '../models/article';
+import supabase from '../utils/supabase';
 
-function toDbArticle(article: Partial<Article>) {
-  // Map camelCase to snake_case for DB
-  const mapped: any = { ...article };
-  if ('createdAt' in mapped) {
-    mapped.created_at = mapped.createdAt;
-    delete mapped.createdAt;
-  }
-  if ('imageUrl' in mapped) {
-    mapped.image_url = mapped.imageUrl;
-    delete mapped.imageUrl;
-  }
-  return mapped;
+export interface Article {
+  id: string;
+  title: string;
+  content: string;
+  imageUrl: string;
+  createdAt: string;
 }
 
-function fromDbArticle(db: any): Article {
-  // Map snake_case to camelCase for app
-  return {
-    id: db.id,
-    title: db.title,
-    content: db.content,
-    imageUrl: db.image_url,
-    createdAt: db.created_at ? new Date(db.created_at).toISOString() : "",
-  };
-}
-
-export async function getAll(
-  limit: number,
-  offset: number
-): Promise<{ data: Article[]; total: number }> {
-  const { data, error, count } = await supabase
+export async function getAll(limit: number, offset: number) {
+  const { data, count, error } = await supabase
     .from('articles')
     .select('*', { count: 'exact' })
-    .range(offset, offset + limit - 1);
+    .order('createdAt', { ascending: false })
+    .limit(limit, { offset });
   if (error) throw error;
-  return { data: (data || []).map(fromDbArticle), total: count || 0 };
+  return { data: data || [], total: count || 0 };
 }
 
-export async function getById(id: string): Promise<Article> {
-  const { data, error } = await supabase.from('articles').select('*').eq('id', id).single();
+export async function getById(id: string) {
+  const { data, error } = await supabase
+    .from('articles')
+    .select('*')
+    .eq('id', id)
+    .single();
   if (error) throw error;
-  return fromDbArticle(data);
+  return data;
 }
 
-export async function create(article: Partial<Article>): Promise<Article> {
-  // Insert and try to get the full row
-  const { data, error } = await supabase.from('articles').insert(toDbArticle(article)).select().single();
+export async function create(article: Article) {
+  const { data, error } = await supabase
+    .from('articles')
+    .insert(article)
+    .single();
   if (error) throw error;
-  // If data is null, fetch by id
-  if (!data) {
-    return await getById(article.id!);
-  }
-  return fromDbArticle(data);
+  return data;
 }
 
-export async function update(id: string, fields: Partial<Article>): Promise<Article> {
-  const { data, error } = await supabase.from('articles').update(toDbArticle(fields)).eq('id', id).single();
+export async function update(id: string, fields: Partial<Article>) {
+  const { data, error } = await supabase
+    .from('articles')
+    .update(fields)
+    .eq('id', id)
+    .single();
   if (error) throw error;
-  return fromDbArticle(data);
+  return data;
 }
 
-export async function remove(id: string): Promise<void> {
-  const { error } = await supabase.from('articles').delete().eq('id', id);
+export async function remove(id: string) {
+  const { error } = await supabase
+    .from('articles')
+    .delete()
+    .eq('id', id);
   if (error) throw error;
 }

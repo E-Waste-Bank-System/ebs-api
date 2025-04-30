@@ -1,25 +1,25 @@
 import { Storage, StorageOptions } from '@google-cloud/storage';
-import { Storage, StorageOptions } from '@google-cloud/storage';
 import env from '../config/env';
-import logger from './logger'; // Import logger
+import logger from './logger';
 
 // Initialize storage options, primarily setting the project ID if available.
 // The @google-cloud/storage library will automatically use
 // GOOGLE_APPLICATION_CREDENTIALS environment variable if set.
-const storageOptions: StorageOptions = {
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS, // Explicitly use the path from env var
-};
-if (env.GCS_PROJECT_ID) {
-  storageOptions.projectId = env.GCS_PROJECT_ID;
-  logger.info(`GCS Project ID set to: ${env.GCS_PROJECT_ID}`);
+const storageOptions: StorageOptions = {};
+if (env.gcsKeyfile) {
+  storageOptions.keyFilename = env.gcsKeyfile;
+}
+if (env.gcsProjectId) {
+  storageOptions.projectId = env.gcsProjectId;
+  logger.info(`GCS Project ID set to: ${env.gcsProjectId}`);
 } else {
-  logger.warn('GCS_PROJECT_ID environment variable not set.');
+  logger.warn('gcsProjectId not set.');
 }
 
 logger.info('Initializing Google Cloud Storage client with explicit keyfile...');
 // Pass the options with keyFilename to the constructor
 const storage = new Storage(storageOptions);
-const bucket = storage.bucket(env.GCS_BUCKET);
+const bucket = storage.bucket(env.gcsBucket);
 
 export async function uploadImage(
   buffer: Buffer,

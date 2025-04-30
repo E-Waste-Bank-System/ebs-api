@@ -1,12 +1,11 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
+import { RequestHandler } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import * as articleService from '../services/articleService';
 import { uploadImage } from '../utils/gcs';
 
 export const getAll: RequestHandler = async (req, res, next) => {
   try {
-    // Use validatedQuery if available, fallback to req.query
-    const { limit = 10, offset = 0 } = (req as any).validatedQuery || req.query;
+    const { limit = 10, offset = 0 } = (req as any).query;
     const { data, total } = await articleService.getAll(Number(limit), Number(offset));
     res.json({ data, total });
   } catch (err) {
@@ -25,7 +24,6 @@ export const getById: RequestHandler = async (req, res, next) => {
 
 export const createArticle: RequestHandler = async (req, res, next) => {
   try {
-    const { title, content } = req.body;
     if (!req.file) {
       res.status(400).json({ message: 'Image file is required' });
       return;
@@ -37,8 +35,8 @@ export const createArticle: RequestHandler = async (req, res, next) => {
     );
     const newArticle = await articleService.create({
       id: uuidv4(),
-      title,
-      content,
+      title: req.body.title,
+      content: req.body.content,
       imageUrl,
       createdAt: new Date().toISOString(),
     });

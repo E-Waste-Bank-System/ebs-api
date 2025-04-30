@@ -8,12 +8,12 @@ export interface User {
   password?: string;
   provider?: 'email' | 'google';
   googleId?: string;
-  isAdmin?: boolean;
+  isadmin?: boolean;
 }
 
-export async function registerUser(email: string, password: string): Promise<User> {
+export async function registerUser(email: string, password: string, isadmin: boolean = false): Promise<User> {
   const hashed = await bcrypt.hash(password, 10);
-  const newUser: User = { id: uuidv4(), email, password: hashed };
+  const newUser: User = { id: uuidv4(), email, password: hashed, isadmin };
   const { data, error } = await supabase.from('users').insert(newUser).single();
   if (error) throw error;
   return data;
@@ -32,7 +32,7 @@ export async function authenticateAdmin(email: string, password: string): Promis
     .from('users')
     .select('*')
     .eq('email', email)
-    .eq('isAdmin', true)
+    .eq('isadmin', true)
     .single();
   if (error || !data) throw new Error('Invalid admin credentials');
   const match = await bcrypt.compare(password, data.password!);

@@ -19,7 +19,17 @@ function sanitizeObject(obj: any): any {
 
 export default function sanitize(req: Request, res: Response, next: NextFunction) {
   if (req.body) req.body = sanitizeObject(req.body);
-  if (req.query) req.query = sanitizeObject(req.query);
-  if (req.params) req.params = sanitizeObject(req.params);
+  // Mutate req.query in place (do not reassign)
+  if (req.query && typeof req.query === 'object') {
+    for (const key in req.query) {
+      req.query[key] = sanitizeObject(req.query[key]);
+    }
+  }
+  // Mutate req.params in place (do not reassign)
+  if (req.params && typeof req.params === 'object') {
+    for (const key in req.params) {
+      req.params[key] = sanitizeObject(req.params[key]);
+    }
+  }
   next();
 }

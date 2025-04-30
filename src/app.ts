@@ -2,7 +2,6 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import mongoSanitize from 'express-mongo-sanitize';
 import cookieParser from 'cookie-parser';
 import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUI from 'swagger-ui-express';
@@ -23,7 +22,6 @@ const app = express();
 app.use(helmet());
 app.use(cors({ origin: env.clientOrigin || '*', credentials: true }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
-app.use(mongoSanitize());
 app.use(sanitize);
 
 // Parsers
@@ -33,8 +31,28 @@ app.use(cookieParser());
 
 // Swagger setup
 const swaggerSpec = swaggerJSDoc({
-  definition: { openapi: '3.0.0', info: { title: 'E-Waste Bank API', version: '1.0.0' } },
-  apis: ['./src/routes/*.ts'],
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'E-Waste Bank API',
+      version: '1.0.0',
+      description: 'API for E-Waste Bank System. Features: authentication, articles, requests, reports, AI inference, and more.'
+    },
+    servers: [
+      { url: 'http://localhost:8080/api', description: 'Local dev server' }
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
+    security: [{ bearerAuth: [] }],
+  },
+  apis: ['./src/routes/*.ts', './src/controllers/*.ts', './src/services/*.ts', './src/app.ts'],
 });
 app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 

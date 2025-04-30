@@ -54,7 +54,9 @@ export async function uploadImage(
     }
     
     // Sanitize filename to prevent path traversal and invalid characters
-    const sanitizedFilename = filename.replace(/[^\w\s.-]/g, '_');
+    // Ensure we're only using the basename and not any path information
+    const baseName = path.basename(filename);
+    const sanitizedFilename = baseName.replace(/[^\w\s.-]/g, '_');
     
     logger.info(`Uploading file "${sanitizedFilename}" to bucket "${env.gcsBucket}"`);
     logger.debug(`File content type: ${contentType}, size: ${buffer.length} bytes`);

@@ -17,7 +17,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
-
 # Set environment variables
 ENV NODE_ENV=production
 # No need for GOOGLE_APPLICATION_CREDENTIALS as we're using default authentication

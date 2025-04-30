@@ -12,8 +12,8 @@ const envSchema = z.object({
   GCS_PROJECT_ID: z.string().optional(),
   GOOGLE_APPLICATION_CREDENTIALS: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1),
-  YOLO_URL: z.string().url(),
-  REGRESSION_URL: z.string().url(),
+  YOLO_URL: z.string().url().optional(),
+  REGRESSION_URL: z.string().url().optional(),
   CLIENT_ORIGIN: z.string().url().optional(),
 });
 

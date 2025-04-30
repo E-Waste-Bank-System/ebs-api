@@ -126,16 +126,15 @@ jobs:
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
           # Set environment variables for the Cloud Run service
           env_vars: |
-            GOOGLE_APPLICATION_CREDENTIALS=${{ secrets.GCP_SA_KEY }},\
-            JWT_SECRET=${{ secrets.JWT_SECRET }},\
-            SUPABASE_URL=${{ secrets.SUPABASE_URL }},\
-            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},\
-            GCP_BUCKET=${{ secrets.GCP_BUCKET }},\
-            GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},\
-            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }},\
-            YOLO_URL=${{ secrets.YOLO_URL }},\
-            REGRESSION_URL=${{ secrets.REGRESSION_URL }},\
-            CLIENT_ORIGIN=${{ secrets.CLIENT_ORIGIN }}
+            JWT_SECRET=82TvAFmH8nQQfTFNu1ExESY9fX9Ztuw7JIHjJJCyM+lljTP6ZwaozoX+n6b88gmN04+AW8CisIEYEPVREFfWIw==,\
+            SUPABASE_URL=https://dyhzmepwuzhfzbuemebb.supabase.co,\
+            SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5aHptZXB3dXpoZnpidWVtZWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NTI0OTkxNywiZXhwIjoyMDYwODI1OTE3fQ.YcdEElDt5KEfBgeHA44VoztgflFuE0EWsz4YH1DJa-E,\
+            GCP_BUCKET=ebs-img-upload,\
+            GCP_PROJECT_ID=ebs-cloud-456404,\
+            GOOGLE_CLIENT_ID=981332637673-otgo810evdbis5hd6oa6pkiq4ha6dq3e.apps.googleusercontent.com,\
+            YOLO_URL=,\
+            REGRESSION_URL=,\
+            CLIENT_ORIGIN=http://localhost:3000
 
             # Add other environment variables needed by your application here
             # Example: DB_HOST=my-db-host

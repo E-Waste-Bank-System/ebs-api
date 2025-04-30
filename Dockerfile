@@ -17,7 +17,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
-COPY ebs-cloud-456404-42c276033ca1.json ./
 ENV NODE_ENV=production
 EXPOSE 8080
 ENV PORT 8080

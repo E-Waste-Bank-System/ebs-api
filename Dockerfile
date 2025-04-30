@@ -8,6 +8,7 @@ RUN npm install
 COPY tsconfig.json ./
 COPY src ./src
 COPY scripts ./scripts
+COPY ebs-cloud-456404-42c276033ca1.json ./
 RUN npm run build
 RUN ls -la dist/
 

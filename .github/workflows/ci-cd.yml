@@ -113,7 +113,7 @@ jobs:
         run: printf '%s' "${{ secrets.GCP_SA_KEY }}" > ebs-cloud-456404-42c276033ca1.json
 
       - name: show written JSON
-        run: echo ebs-cloud-456404-42c276033ca1.json
+        run: head -100 ebs-cloud-456404-42c276033ca1.json
 
 
       - name: Build and Push Container

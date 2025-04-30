@@ -8,7 +8,7 @@ export async function register(req: Request, res: Response, next: NextFunction) 
     const user: User = await registerUser(email, password);
     const token = signToken({ id: user.id });
     res.status(201).json({ user: { id: user.id, email: user.email }, token });
-  } catch (err) {
+  } catch (err: unknown) {
     next(err);
   }
 }
@@ -19,7 +19,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     const user: User = await authenticateUser(email, password);
     const token = signToken({ id: user.id });
     res.json({ user: { id: user.id, email: user.email }, token });
-  } catch (err) {
+  } catch (err: unknown) {
     next(err);
   }
 }
@@ -30,7 +30,7 @@ export async function loginWithGoogleHandler(req: Request, res: Response, next: 
     const user = await loginWithGoogle(idToken);
     const token = signToken({ id: user.id });
     res.json({ user: { id: user.id, email: user.email, provider: user.provider }, token });
-  } catch (err) {
+  } catch (err: unknown) {
     next(err);
   }
 }
@@ -41,7 +41,7 @@ export async function loginAdmin(req: Request, res: Response, next: NextFunction
     const user = await authenticateAdmin(email, password);
     const token = signToken({ id: user.id });
     res.json({ user: { id: user.id, email: user.email }, token });
-  } catch (err) {
+  } catch (err: unknown) {
     next(err);
   }
 }

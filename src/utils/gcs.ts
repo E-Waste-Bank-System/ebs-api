@@ -3,6 +3,7 @@ import env from '../config/env';
 import logger from './logger';
 import path from 'path';
 import fs from 'fs';
+import { getErrorMessage } from './error-utils';
 
 // Initialize storage options
 const storageOptions: StorageOptions = {};
@@ -42,11 +43,61 @@ export async function uploadImage(
   filename: string,
   contentType: string
 ): Promise<string> {
-  logger.info(`Uploading file ${filename} to bucket ${env.gcsBucket}`);
-  const file = bucket.file(filename);
-  await file.save(buffer, { contentType });
-  await file.makePublic();
-  const publicUrl = `https://storage.googleapis.com/${env.gcsBucket}/${filename}`;
-  logger.info(`Upload complete: ${publicUrl}`);
-  return publicUrl;
+  try {
+    // Validate inputs to prevent path-related issues
+    if (!buffer || buffer.length === 0) {
+      throw new Error('Empty file buffer provided');
+    }
+    
+    if (!filename || typeof filename !== 'string') {
+      throw new Error(`Invalid filename provided: ${filename}`);
+    }
+    
+    // Sanitize filename to prevent path traversal and invalid characters
+    const sanitizedFilename = filename.replace(/[^\w\s.-]/g, '_');
+    
+    logger.info(`Uploading file "${sanitizedFilename}" to bucket "${env.gcsBucket}"`);
+    logger.debug(`File content type: ${contentType}, size: ${buffer.length} bytes`);
+    
+    if (!env.gcsBucket) {
+      throw new Error('GCS bucket name is not configured');
+    }
+
+    const file = bucket.file(sanitizedFilename);
+    
+    // More detailed logging for debugging
+    logger.debug(`GCS file path: ${file.name}`);
+    
+    try {
+      await file.save(buffer, { contentType });
+      logger.info(`File saved successfully to GCS: ${sanitizedFilename}`);
+    } catch (saveError: unknown) {
+      const errorMessage = getErrorMessage(saveError);
+      logger.error(`Error saving file to GCS: ${errorMessage}`, { error: saveError });
+      throw new Error(`Failed to save file to GCS: ${errorMessage}`);
+    }
+    
+    try {
+      await file.makePublic();
+      logger.info(`File made public successfully: ${sanitizedFilename}`);
+    } catch (publicError: unknown) {
+      const errorMessage = getErrorMessage(publicError);
+      logger.error(`Error making file public: ${errorMessage}`, { error: publicError });
+      throw new Error(`Failed to make file public: ${errorMessage}`);
+    }
+    
+    const publicUrl = `https://storage.googleapis.com/${env.gcsBucket}/${sanitizedFilename}`;
+    logger.info(`Upload complete: ${publicUrl}`);
+    return publicUrl;
+  } catch (error: unknown) {
+    const errorMessage = getErrorMessage(error);
+    logger.error(`File upload failed: ${errorMessage}`, { 
+      error,
+      filename,
+      contentType,
+      bufferSize: buffer ? buffer.length : 'N/A',
+      bucket: env.gcsBucket
+    });
+    throw error; // Re-throw for handling by the caller
+  }
 }

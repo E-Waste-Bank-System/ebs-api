@@ -24,7 +24,16 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Security
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+    }
+  }
+}));
 app.use(cors({ origin: env.clientOrigin || '*', credentials: true }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 app.use(sanitize);
@@ -37,9 +46,28 @@ app.use(cookieParser());
 // Swagger setup
 let swaggerSpec: any;
 if (process.env.NODE_ENV === 'production') {
-  swaggerSpec = JSON.parse(fs.readFileSync(path.join(__dirname, 'swagger.json'), 'utf8'));
+  try {
+    const swaggerJsonPath = path.join(__dirname, 'swagger.json');
+    logger.info(`Loading Swagger spec from: ${swaggerJsonPath}`);
+    
+    if (fs.existsSync(swaggerJsonPath)) {
+      swaggerSpec = JSON.parse(fs.readFileSync(swaggerJsonPath, 'utf8'));
+      logger.info('Successfully loaded Swagger spec from file');
+    } else {
+      logger.warn(`swagger.json not found at ${swaggerJsonPath}, falling back to dynamic generation`);
+      swaggerSpec = generateSwaggerSpec();
+    }
+  } catch (error) {
+    logger.error('Error loading Swagger spec from file, falling back to dynamic generation', error);
+    swaggerSpec = generateSwaggerSpec();
+  }
 } else {
-  swaggerSpec = swaggerJSDoc({
+  swaggerSpec = generateSwaggerSpec();
+}
+
+function generateSwaggerSpec() {
+  logger.info('Generating Swagger spec dynamically');
+  return swaggerJSDoc({
     definition: {
       openapi: '3.0.0',
       info: {
@@ -70,6 +98,7 @@ if (process.env.NODE_ENV === 'production') {
     ],
   });
 }
+
 app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 
 // Mount routes

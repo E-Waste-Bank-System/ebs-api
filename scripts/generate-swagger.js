@@ -3,6 +3,8 @@ const swaggerJSDoc = require('swagger-jsdoc');
 const fs = require('fs');
 const path = require('path');
 
+console.log('Generating Swagger specification...');
+
 const swaggerSpec = swaggerJSDoc({
   definition: {
     openapi: '3.0.0',
@@ -27,16 +29,21 @@ const swaggerSpec = swaggerJSDoc({
     security: [{ bearerAuth: [] }],
   },
   apis: [
-    './src/routes/*.ts',
-    './src/controllers/*.ts',
-    './src/services/*.ts',
-    './src/app.ts',
+    path.resolve(__dirname, '../src/routes/*.ts'),
+    path.resolve(__dirname, '../src/controllers/*.ts'),
+    path.resolve(__dirname, '../src/services/*.ts'),
+    path.resolve(__dirname, '../src/app.ts'),
   ],
 });
 
-fs.writeFileSync(
-  path.join(__dirname, '../dist/swagger.json'),
-  JSON.stringify(swaggerSpec, null, 2)
-);
+const distDir = path.join(__dirname, '../dist');
+// Make sure the dist directory exists
+if (!fs.existsSync(distDir)) {
+  console.log('Creating dist directory...');
+  fs.mkdirSync(distDir, { recursive: true });
+}
 
-console.log('Swagger spec generated!');
+const outputPath = path.join(distDir, 'swagger.json');
+fs.writeFileSync(outputPath, JSON.stringify(swaggerSpec, null, 2));
+
+console.log(`Swagger spec generated at: ${outputPath}`);

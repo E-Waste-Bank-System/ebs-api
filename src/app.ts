@@ -15,6 +15,8 @@ import articleRoutes from './routes/article';
 import requestRoutes from './routes/request';
 import reportRoutes from './routes/report';
 import proxyRoutes from './routes/proxy';
+import fs from 'fs';
+import path from 'path';
 
 const app = express();
 
@@ -30,44 +32,41 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // Swagger setup
-const swaggerSpec = swaggerJSDoc({
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'E-Waste Bank API',
-      version: '1.0.0',
-      description: 'API for E-Waste Bank System. Features: authentication, articles, requests, reports, AI inference, and more.'
-    },
-    servers: [
-      { url: 'http://localhost:8080/api', description: 'Local dev server' },
-      { url: 'https://ebs-api-981332637673.asia-southeast2.run.app/api', description: 'Production server' },
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
+let swaggerSpec: any;
+if (process.env.NODE_ENV === 'production') {
+  swaggerSpec = JSON.parse(fs.readFileSync(path.join(__dirname, 'swagger.json'), 'utf8'));
+} else {
+  swaggerSpec = swaggerJSDoc({
+    definition: {
+      openapi: '3.0.0',
+      info: {
+        title: 'E-Waste Bank API',
+        version: '1.0.0',
+        description: 'API for E-Waste Bank System. Features: authentication, articles, requests, reports, AI inference, and more.'
+      },
+      servers: [
+        { url: 'http://localhost:8080/api', description: 'Local dev server' },
+        { url: 'https://ebs-api-981332637673.asia-southeast2.run.app/api', description: 'Production server' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
         },
       },
+      security: [{ bearerAuth: [] }],
     },
-    security: [{ bearerAuth: [] }],
-  },
-  apis: [
-    process.env.NODE_ENV === 'production'
-      ? './dist/routes/*.js'
-      : './src/routes/*.ts',
-    process.env.NODE_ENV === 'production'
-      ? './dist/controllers/*.js'
-      : './src/controllers/*.ts',
-    process.env.NODE_ENV === 'production'
-      ? './dist/services/*.js'
-      : './src/services/*.ts',
-    process.env.NODE_ENV === 'production'
-      ? './dist/app.js'
-      : './src/app.ts',
-  ],
-});
+    apis: [
+      './src/routes/*.ts',
+      './src/controllers/*.ts',
+      './src/services/*.ts',
+      './src/app.ts',
+    ],
+  });
+}
 app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 
 // Mount routes

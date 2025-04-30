@@ -7,6 +7,7 @@ COPY package*.json ./
 RUN npm install
 COPY tsconfig.json ./
 COPY src ./src
+COPY scripts ./scripts
 COPY src/config ./config
 COPY src/middlewares ./middlewares
 COPY src/controllers ./controllers

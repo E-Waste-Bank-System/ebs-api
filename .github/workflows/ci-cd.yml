@@ -126,7 +126,7 @@ jobs:
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
           # Set environment variables for the Cloud Run service
           env_vars: |
-            GCS_KEYFILE=${{ secrets.GCS_KEYFILE }}
+            GOOGLE_APPLICATION_CREDENTIALS=${{ secrets.GCS_KEYFILE }}
             # Add other environment variables needed by your application here
             # Example: DB_HOST=my-db-host
 

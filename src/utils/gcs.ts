@@ -1,14 +1,13 @@
 import { Storage, StorageOptions } from '@google-cloud/storage';
 import env from '../config/env';
 import logger from './logger';
+import path from 'path';
+import fs from 'fs';
 
-// Initialize storage options, primarily setting the project ID if available.
-// The @google-cloud/storage library will automatically use
-// GOOGLE_APPLICATION_CREDENTIALS environment variable if set.
+// Initialize storage options
 const storageOptions: StorageOptions = {};
-if (env.gcsKeyfile) {
-  storageOptions.keyFilename = env.gcsKeyfile;
-}
+
+// Check for GCP Project ID
 if (env.gcsProjectId) {
   storageOptions.projectId = env.gcsProjectId;
   logger.info(`GCS Project ID set to: ${env.gcsProjectId}`);
@@ -16,8 +15,25 @@ if (env.gcsProjectId) {
   logger.warn('gcsProjectId not set.');
 }
 
-logger.info('Initializing Google Cloud Storage client with explicit keyfile...');
-// Pass the options with keyFilename to the constructor
+// Handle credentials in a Docker-friendly way
+if (process.env.NODE_ENV === 'production') {
+  // In production (Docker container), use Google's default auth mechanism
+  // which will use the appropriate service account credentials
+  logger.info('Initializing Google Cloud Storage client with default authentication...');
+} else if (env.gcsKeyfile) {
+  // In development, use the keyfile if specified
+  // Make sure path is resolved correctly
+  const keyfilePath = path.resolve(process.cwd(), env.gcsKeyfile);
+  
+  if (fs.existsSync(keyfilePath)) {
+    logger.info(`Using GCS keyfile at: ${keyfilePath}`);
+    storageOptions.keyFilename = keyfilePath;
+  } else {
+    logger.error(`GCS keyfile not found at: ${keyfilePath}`);
+  }
+}
+
+// Initialize storage client with appropriate options
 const storage = new Storage(storageOptions);
 const bucket = storage.bucket(env.gcsBucket);
 

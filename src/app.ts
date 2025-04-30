@@ -20,6 +20,9 @@ import path from 'path';
 
 const app = express();
 
+// Trust proxy for correct client IP detection (needed for Cloud Run, rate limiting, etc.)
+app.set('trust proxy', 1);
+
 // Security
 app.use(helmet());
 app.use(cors({ origin: env.clientOrigin || '*', credentials: true }));

@@ -5,14 +5,10 @@ import path from 'path';
 import { getErrorMessage } from './error-utils';
 
 // Initialize storage client with default authentication
-// This will use:
-// - Application Default Credentials in Cloud Run
-// - Service account set via GitHub Actions auth
-// - Local credentials if running locally with gcloud auth
-logger.info('Initializing Google Cloud Storage client with default authentication...');
-const storage = new Storage({
-  projectId: env.gcsProjectId // Optional but can be helpful
-});
+// When running in Cloud Run, it will automatically use the service account
+// credentials of the Cloud Run service
+logger.info('Initializing Google Cloud Storage client with default authentication');
+const storage = new Storage();
 const bucket = storage.bucket(env.gcsBucket);
 
 // Maximum number of retry attempts for uploads

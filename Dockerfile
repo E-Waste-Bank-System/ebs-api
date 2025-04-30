@@ -7,13 +7,13 @@ COPY package*.json ./
 RUN npm install
 COPY tsconfig.json ./
 COPY src ./src
-COPY config ./config
-COPY middlewares ./middlewares
-COPY controllers ./controllers
-COPY routes ./routes
-COPY services ./services
-COPY utils ./utils
-COPY types ./types
+COPY src/config ./config
+COPY src/middlewares ./middlewares
+COPY src/controllers ./controllers
+COPY src/routes ./routes
+COPY src/services ./services
+COPY src/utils ./utils
+COPY src/types ./types
 RUN npm run build
 
 # 2. Production stage

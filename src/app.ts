@@ -39,7 +39,8 @@ const swaggerSpec = swaggerJSDoc({
       description: 'API for E-Waste Bank System. Features: authentication, articles, requests, reports, AI inference, and more.'
     },
     servers: [
-      { url: 'http://localhost:8080/api', description: 'Local dev server' }
+      { url: 'http://localhost:8080/api', description: 'Local dev server' },
+      { url: 'https://ebs-api-981332637673.asia-southeast2.run.app/api', description: 'Production server' },
     ],
     components: {
       securitySchemes: {

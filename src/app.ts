@@ -53,7 +53,20 @@ const swaggerSpec = swaggerJSDoc({
     },
     security: [{ bearerAuth: [] }],
   },
-  apis: ['./src/routes/*.ts', './src/controllers/*.ts', './src/services/*.ts', './src/app.ts'],
+  apis: [
+    process.env.NODE_ENV === 'production'
+      ? './dist/routes/*.js'
+      : './src/routes/*.ts',
+    process.env.NODE_ENV === 'production'
+      ? './dist/controllers/*.js'
+      : './src/controllers/*.ts',
+    process.env.NODE_ENV === 'production'
+      ? './dist/services/*.js'
+      : './src/services/*.ts',
+    process.env.NODE_ENV === 'production'
+      ? './dist/app.js'
+      : './src/app.ts',
+  ],
 });
 app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 

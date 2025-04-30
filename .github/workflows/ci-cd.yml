@@ -110,7 +110,7 @@ jobs:
             password: ${{ secrets.GCP_SA_KEY }}
 
       - name: Write GCP service account key
-        run: echo "${{ secrets.GCP_SA_KEY }}" > ebs-cloud-456404-42c276033ca1.json
+        run: printf '%s' "${{ secrets.GCP_SA_KEY }}" > ebs-cloud-456404-42c276033ca1.json
 
 
       - name: Build and Push Container

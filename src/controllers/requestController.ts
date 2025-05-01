@@ -65,11 +65,11 @@ export async function createRequest(req: AuthRequest, res: Response, next: NextF
     const { weight, location, pickupDate } = req.body;
     const newReq = await requestService.createRequest({
       id: uuidv4(),
-      userId: req.user.id,
+      user_id: req.user.id,
       weight: Number(weight),
       location,
-      pickupDate,
-      imageUrl,
+      pickup_date: pickupDate,
+      image_url: imageUrl,
       status: 'pending'
     });
     res.status(201).json(newReq);

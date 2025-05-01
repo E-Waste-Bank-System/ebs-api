@@ -57,7 +57,7 @@ export const createArticle: RequestHandler = async (req, res, next) => {
       id: uuidv4(),
       title: req.body.title,
       content: req.body.content,
-      imageUrl,
+      image_url: imageUrl,
       created_at: new Date().toISOString(),
     });
     res.status(201).json(newArticle);
@@ -78,7 +78,7 @@ export const updateArticle: RequestHandler = async (req, res, next) => {
       const safeFilename = createSafeFilename(req.file.originalname);
       logger.debug(`Original filename: ${req.file.originalname}, Safe filename: ${safeFilename}`);
       
-      fields.imageUrl = await uploadImage(
+      fields.image_url = await uploadImage(
         req.file.buffer,
         safeFilename,
         req.file.mimetype

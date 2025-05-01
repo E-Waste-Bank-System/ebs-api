@@ -35,6 +35,7 @@ export async function createRequest(request: Omit<EWasteRequest, 'created_at'>) 
   const { data, error } = await supabase
     .from('requests')
     .insert(request)
+    .select()
     .single();
   if (error) throw error;
   return data;
@@ -45,6 +46,7 @@ export async function updateRequestStatus(id: string, status: string) {
     .from('requests')
     .update({ status })
     .eq('id', id)
+    .select()
     .single();
   if (error) throw error;
   return data;

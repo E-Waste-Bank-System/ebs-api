@@ -32,6 +32,7 @@ export async function create(article: Article) {
   const { data, error } = await supabase
     .from('articles')
     .insert(article)
+    .select()
     .single();
   if (error) throw error;
   return data;
@@ -42,6 +43,7 @@ export async function update(id: string, fields: Partial<Article>) {
     .from('articles')
     .update(fields)
     .eq('id', id)
+    .select()
     .single();
   if (error) throw error;
   return data;

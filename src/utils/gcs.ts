@@ -4,6 +4,9 @@ import logger from './logger';
 import path from 'path';
 import { getErrorMessage } from './error-utils';
 
+// Explicitly unset GOOGLE_APPLICATION_CREDENTIALS to prevent looking for a file
+process.env.GOOGLE_APPLICATION_CREDENTIALS = '';
+
 // Initialize storage client with workload identity authentication
 // This uses the default Cloud Run service account in production
 // For local development, Application Default Credentials will be used

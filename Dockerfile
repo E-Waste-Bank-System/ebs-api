@@ -21,8 +21,11 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 # Set environment variables
 ENV NODE_ENV=production
-# Explicitly unset any credentials env var to ensure we use workload identity
+# Explicitly unset credentials env var to ensure we use workload identity
 ENV GOOGLE_APPLICATION_CREDENTIALS=""
+# Print environment for debugging
+RUN echo "Environment setup complete. GOOGLE_APPLICATION_CREDENTIALS=''"
+
 EXPOSE 8080
 ENV PORT 8080
 CMD ["node", "dist/server.js"]

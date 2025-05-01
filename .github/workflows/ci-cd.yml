@@ -136,7 +136,7 @@ jobs:
             JWT_SECRET=82TvAFmH8nQQfTFNu1ExESY9fX9Ztuw7JIHjJJCyM+lljTP6ZwaozoX+n6b88gmN04+AW8CisIEYEPVREFfWIw==
             SUPABASE_URL=https://dyhzmepwuzhfzbuemebb.supabase.co
             SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5aHptZXB3dXpoZnpidWVtZWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NTI0OTkxNywiZXhwIjoyMDYwODI1OTE3fQ.YcdEElDt5KEfBgeHA44VoztgflFuE0EWsz4YH1DJa-E
-            GCP_BUCKET=ebs-img-upload
+            GCP_BUCKET=ebs-storage
             GCP_PROJECT_ID=ebs-cloud-456404
             GOOGLE_CLIENT_ID=981332637673-otgo810evdbis5hd6oa6pkiq4ha6dq3e.apps.googleusercontent.com
             YOLO_URL=http://yolo-service/api/infer

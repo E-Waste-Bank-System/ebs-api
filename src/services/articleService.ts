@@ -5,14 +5,14 @@ export interface Article {
   title: string;
   content: string;
   imageUrl: string;
-  createdAt: string;
+  created_at: string;
 }
 
 export async function getAll(limit: number, offset: number) {
   const { data, count, error } = await supabase
     .from('articles')
     .select('*', { count: 'exact' })
-    .order('createdAt', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(limit, { offset });
   if (error) throw error;
   return { data: data || [], total: count || 0 };

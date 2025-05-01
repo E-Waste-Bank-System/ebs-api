@@ -58,7 +58,7 @@ export const createArticle: RequestHandler = async (req, res, next) => {
       title: req.body.title,
       content: req.body.content,
       imageUrl,
-      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     });
     res.status(201).json(newArticle);
   } catch (err: unknown) {

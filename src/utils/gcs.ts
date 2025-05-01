@@ -9,7 +9,8 @@ import { getErrorMessage } from './error-utils';
 // For local development, Application Default Credentials will be used
 logger.info('Initializing Google Cloud Storage client with workload identity authentication');
 const storage = new Storage({
-  projectId: env.gcsProjectId, // Using the correct variable name from env config
+  projectId: env.gcsProjectId,
+  keyFilename: undefined, // Explicitly tell the library not to use a credentials file
 });
 const bucket = storage.bucket(env.gcsBucket);
 

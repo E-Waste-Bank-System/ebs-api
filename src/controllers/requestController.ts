@@ -62,13 +62,11 @@ export async function createRequest(req: AuthRequest, res: Response, next: NextF
       req.file.mimetype
     );
     
-    const { weight, location, pickupDate } = req.body;
+    const { description } = req.body;
     const newReq = await requestService.createRequest({
       id: uuidv4(),
       user_id: req.user.id,
-      weight: Number(weight),
-      location,
-      pickup_date: pickupDate,
+      description,
       image_url: imageUrl,
       status: 'pending'
     });

@@ -3,10 +3,8 @@ import supabase from '../utils/supabase';
 export interface EWasteRequest {
   id: string;
   user_id: string;
-  weight: number;
-  location: string;
-  pickup_date?: string;
   image_url: string;
+  description: string;
   status: string;
   created_at: string;
 }

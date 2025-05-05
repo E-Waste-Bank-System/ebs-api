@@ -56,9 +56,9 @@ export default router;
  *           type: string
  *         content:
  *           type: string
- *         imageUrl:
+ *         image_url:
  *           type: string
- *         createdAt:
+ *         created_at:
  *           type: string
  *           format: date-time
  *     ArticleCreate:

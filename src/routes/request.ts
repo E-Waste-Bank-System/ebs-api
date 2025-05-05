@@ -20,9 +20,7 @@ const querySchema = z.object({
 });
 
 const createSchema = z.object({
-  weight: z.coerce.number().positive(),
-  location: z.string().min(1),
-  pickupDate: z.string().optional(),
+  description: z.string().min(1)
 });
 
 /**
@@ -41,33 +39,24 @@ const createSchema = z.object({
  *       properties:
  *         id:
  *           type: string
- *         userId:
+ *         user_id:
  *           type: string
- *         weight:
- *           type: number
- *         location:
+ *         description:
  *           type: string
- *         pickupDate:
- *           type: string
- *           format: date
- *         imageUrl:
+ *         image_url:
  *           type: string
  *         status:
  *           type: string
- *         createdAt:
+ *           enum: [pending, approved, rejected]
+ *         created_at:
  *           type: string
  *           format: date-time
  *     EWasteRequestCreate:
  *       type: object
  *       required:
- *         - weight
- *         - location
+ *         - description
  *       properties:
- *         weight:
- *           type: number
- *         location:
- *           type: string
- *         pickupDate:
+ *         description:
  *           type: string
  *         image:
  *           type: string

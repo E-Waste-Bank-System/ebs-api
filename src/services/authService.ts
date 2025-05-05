@@ -7,14 +7,14 @@ export interface User {
   email: string;
   password?: string;
   provider?: 'email' | 'google';
-  googleId?: string;
-  isadmin?: boolean;
+  google_id?: string;  // Changed from googleId to google_id
+  is_admin?: boolean;  // Changed from isadmin to is_admin
 }
 
-export async function registerUser(email: string, password: string, isadmin: boolean = false): Promise<User> {
+export async function registerUser(email: string, password: string, is_admin: boolean = false): Promise<User> {
   const hashed = await bcrypt.hash(password, 10);
-  const newUser: User = { id: uuidv4(), email, password: hashed, isadmin };
-  const { data, error } = await supabase.from('users').insert(newUser).single();
+  const newUser: User = { id: uuidv4(), email, password: hashed, is_admin };
+  const { data, error } = await supabase.from('users').insert(newUser).select().single();
   if (error) throw error;
   return data;
 }
@@ -32,7 +32,7 @@ export async function authenticateAdmin(email: string, password: string): Promis
     .from('users')
     .select('*')
     .eq('email', email)
-    .eq('isadmin', true)
+    .eq('is_admin', true)  // Changed from isadmin to is_admin
     .single();
   if (error || !data) throw new Error('Invalid admin credentials');
   const match = await bcrypt.compare(password, data.password!);
@@ -52,13 +52,13 @@ export async function loginWithGoogle(idToken: string): Promise<User> {
   const ticket = await googleClient.verifyIdToken({ idToken, audience: env.googleClientId });
   const payload = ticket.getPayload();
   if (!payload || !payload.sub || !payload.email) throw new Error('Invalid Google token');
-  // check existing by googleId
-  const { data, error } = await supabase.from('users').select('*').eq('googleId', payload.sub).single();
+  // check existing by google_id
+  const { data, error } = await supabase.from('users').select('*').eq('google_id', payload.sub).single();
   if (error && error.code !== 'PGRST116') throw error; // ignore not found
   if (data) return { ...data };
   // insert new user
-  const newUser = { id: uuidv4(), email: payload.email, provider: 'google', googleId: payload.sub };
-  const insert = await supabase.from('users').insert(newUser).single();
+  const newUser = { id: uuidv4(), email: payload.email, provider: 'google', google_id: payload.sub };
+  const insert = await supabase.from('users').insert(newUser).select().single();
   if (insert.error) throw insert.error;
   return insert.data;
 }

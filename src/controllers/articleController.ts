@@ -17,7 +17,8 @@ function createSafeFilename(originalFilename: string): string {
 
 export const getAll: RequestHandler = async (req, res, next) => {
   try {
-    const { limit = 10, offset = 0 } = (req as any).query;
+    // Use validatedQuery if it exists, otherwise fall back to query for backward compatibility
+    const { limit = 10, offset = 0 } = (req as any).validatedQuery || req.query;
     const { data, total } = await articleService.getAll(Number(limit), Number(offset));
     res.json({ data, total });
   } catch (err: unknown) {

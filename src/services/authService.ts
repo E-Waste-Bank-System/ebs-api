@@ -32,7 +32,7 @@ export async function authenticateAdmin(email: string, password: string): Promis
     .from('users')
     .select('*')
     .eq('email', email)
-    .eq('is_admin', true)  // Changed from isadmin to is_admin
+    .eq('is_admin', true)  
     .single();
   if (error || !data) throw new Error('Invalid admin credentials');
   const match = await bcrypt.compare(password, data.password!);

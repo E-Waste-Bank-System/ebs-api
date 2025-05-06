@@ -26,7 +26,8 @@ export const getReports: RequestHandler = async (req, res, next) => {
 
 export const getAllReports: RequestHandler = async (req, res, next) => {
   try {
-    const { limit = 10, offset = 0 } = (req as any).query;
+    // Use validatedQuery if it exists, otherwise fall back to query for backward compatibility
+    const { limit = 10, offset = 0 } = (req as any).validatedQuery || req.query;
     const { data, total } = await reportService.getAllReports(Number(limit), Number(offset));
     res.json({ data, total });
   } catch (err: unknown) {

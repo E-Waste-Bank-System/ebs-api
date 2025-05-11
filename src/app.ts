@@ -12,7 +12,6 @@ import sanitize from './middlewares/sanitize';
 // Route imports
 import authRoutes from './routes/auth';
 import articleRoutes from './routes/article';
-import requestRoutes from './routes/request';
 import reportRoutes from './routes/report';
 import fs from 'fs';
 import path from 'path';
@@ -78,7 +77,7 @@ function generateSwaggerSpec() {
       info: {
         title: 'E-Waste Bank API',
         version: '1.0.0',
-        description: 'API for E-Waste Bank System. Features: authentication, articles, requests, reports, AI inference, and more.'
+        description: 'API for E-Waste Bank System. Features: authentication, articles, reports, AI inference, and more.'
       },
       servers: [
         { url: 'http://localhost:8080/api', description: 'Local dev server' },
@@ -109,7 +108,6 @@ app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
-app.use('/api/requests', requestRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/detections', detectionRoutes);
 app.use('/api/validations', validationRoutes);

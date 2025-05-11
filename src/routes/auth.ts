@@ -1,104 +1,21 @@
 import { Router } from 'express';
-import { register, login, loginWithGoogleHandler, loginAdmin } from '../controllers/authController';
+import { login } from '../controllers/authController';
 import validate from '../middlewares/validate';
 import { z } from 'zod';
 
 const router = Router();
 
-const authSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-});
-const googleSchema = z.object({ idToken: z.string().min(1) });
-
 /**
  * @swagger
  * tags:
  *   name: Auth
- *   description: Authentication and admin endpoints
+ *   description: Admin authentication endpoint
  */
-
-/**
- * @swagger
- * components:
- *   schemas:
- *     AuthRequest:
- *       type: object
- *       required:
- *         - email
- *         - password
- *       properties:
- *         email:
- *           type: string
- *           format: email
- *         password:
- *           type: string
- *           format: password
- *     AuthResponse:
- *       type: object
- *       properties:
- *         user:
- *           type: object
- *           properties:
- *             id:
- *               type: string
- *             email:
- *               type: string
- *         token:
- *           type: string
- */
-
-/**
- * @swagger
- * /auth/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/AuthRequest'
- *     responses:
- *       201:
- *         description: User registered
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *       400:
- *         description: Invalid input
- */
-
 /**
  * @swagger
  * /auth/login:
  *   post:
- *     summary: Login as a user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/AuthRequest'
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *       401:
- *         description: Invalid credentials
- */
-
-/**
- * @swagger
- * /auth/login/google:
- *   post:
- *     summary: Login or register with Google
+ *     summary: Login as admin (Supabase Auth user_id)
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -107,45 +24,34 @@ const googleSchema = z.object({ idToken: z.string().min(1) });
  *           schema:
  *             type: object
  *             properties:
- *               idToken:
+ *               user_id:
  *                 type: string
+ *                 format: uuid
  *     responses:
  *       200:
  *         description: Login successful
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     is_admin:
+ *                       type: boolean
+ *                 token:
+ *                   type: string
  *       401:
- *         description: Invalid Google token
+ *         description: Invalid credentials
  */
 
-/**
- * @swagger
- * /auth/login/admin:
- *   post:
- *     summary: Login as an admin
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/AuthRequest'
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/AuthResponse'
- *       401:
- *         description: Invalid admin credentials
- */
+const loginSchema = z.object({
+  user_id: z.string().uuid(),
+});
 
-router.post('/register', validate(authSchema), register);
-router.post('/login', validate(authSchema), login);
-router.post('/login/google', validate(googleSchema), loginWithGoogleHandler);
-router.post('/login/admin', validate(authSchema), loginAdmin);
+router.post('/login', validate(loginSchema), login);
 
 export default router;

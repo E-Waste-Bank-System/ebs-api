@@ -14,9 +14,14 @@ import authRoutes from './routes/auth';
 import articleRoutes from './routes/article';
 import requestRoutes from './routes/request';
 import reportRoutes from './routes/report';
-import proxyRoutes from './routes/proxy';
 import fs from 'fs';
 import path from 'path';
+import detectionRoutes from './routes/detection';
+import validationRoutes from './routes/validation';
+import { getStatistics } from './controllers/statisticsController';
+import userRoutes from './routes/user';
+import upload from './middlewares/upload';
+import { uploadFile } from './controllers/uploadController';
 
 const app = express();
 
@@ -106,7 +111,11 @@ app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/reports', reportRoutes);
-app.use('/api/proxy', proxyRoutes);
+app.use('/api/detections', detectionRoutes);
+app.use('/api/validations', validationRoutes);
+app.get('/api/stats', getStatistics);
+app.use('/api/admins', userRoutes);
+app.post('/api/upload', upload.single('image'), uploadFile);
 
 // Error handling
 app.use(errorHandler);

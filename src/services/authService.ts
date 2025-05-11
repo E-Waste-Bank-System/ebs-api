@@ -1,6 +1,8 @@
 import supabase from '../utils/supabase';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { OAuth2Client } from 'google-auth-library';
+import env from '../config/env';
 
 export interface User {
   id: string;
@@ -40,25 +42,17 @@ export async function authenticateAdmin(email: string, password: string): Promis
   return data;
 }
 
-/**
- * Perform Google authentication: verify ID token, upsert user
- */
-import { OAuth2Client } from 'google-auth-library';
-import env from '../config/env';
 // Initialize Google OAuth2Client with client ID for audience validation
 const googleClient = new OAuth2Client(env.googleClientId);
 
-export async function loginWithGoogle(idToken: string): Promise<User> {
+export async function isAdminUser(user_id: string): Promise<boolean> {
+  const { data, error } = await supabase.from('admin').select('*').eq('user_id', user_id).single();
+  return !!data && !error;
+}
+
+export async function loginWithGoogle(idToken: string) {
   const ticket = await googleClient.verifyIdToken({ idToken, audience: env.googleClientId });
   const payload = ticket.getPayload();
   if (!payload || !payload.sub || !payload.email) throw new Error('Invalid Google token');
-  // check existing by google_id
-  const { data, error } = await supabase.from('users').select('*').eq('google_id', payload.sub).single();
-  if (error && error.code !== 'PGRST116') throw error; // ignore not found
-  if (data) return { ...data };
-  // insert new user
-  const newUser = { id: uuidv4(), email: payload.email, provider: 'google', google_id: payload.sub };
-  const insert = await supabase.from('users').insert(newUser).select().single();
-  if (insert.error) throw insert.error;
-  return insert.data;
+  return payload;
 }

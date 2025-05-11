@@ -56,3 +56,14 @@ export async function loginWithGoogle(idToken: string) {
   if (!payload || !payload.sub || !payload.email) throw new Error('Invalid Google token');
   return payload;
 }
+
+// Fetch user details by user_id
+export async function getUserById(user_id: string): Promise<User | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, email, is_admin')
+    .eq('id', user_id)
+    .single();
+  if (error || !data) return null;
+  return data;
+}

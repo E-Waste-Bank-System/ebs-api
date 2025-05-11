@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { isAdminUser } from '../services/authService';
+import { isAdminUser, getUserById } from '../services/authService';
 import { signToken } from '../utils/token';
 
 /**
@@ -38,13 +38,17 @@ import { signToken } from '../utils/token';
  *       401:
  *         description: Invalid credentials
  */
-export async function login(req: Request, res: Response, next: NextFunction) {
+export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    // Assume Supabase Auth is used for login, and user_id is available after login
-    const { user_id } = req.body; // This should come from Supabase Auth JWT
-    const isAdmin = await isAdminUser(user_id);
-    const token = signToken({ id: user_id, is_admin: isAdmin });
-    res.json({ user: { id: user_id, is_admin: isAdmin }, token });
+    const { user_id } = req.body;
+    // Fetch user details
+    const user = await getUserById(user_id);
+    if (!user || !user.is_admin) {
+      res.status(401).json({ message: 'Invalid credentials' });
+      return;
+    }
+    const token = signToken({ id: user.id, is_admin: user.is_admin });
+    res.json({ user: { id: user.id, is_admin: user.is_admin }, token });
   } catch (err: unknown) {
     next(err);
   }

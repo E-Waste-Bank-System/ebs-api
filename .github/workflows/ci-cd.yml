@@ -142,7 +142,7 @@ jobs:
             YOLO_URL=https://ebs-cv-981332637673.asia-southeast2.run.app/predict
             REGRESSION_URL=http://regression-service/api/predict
             CLIENT_ORIGIN=http://localhost:3000
-            GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyBI-WX9MQaiWyMwmwHoZS48gNu0e9Pu6P0
+            GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyBI-WX9MQaiWyMwmwHoZS48gNu0e9Pu6P0
             GEMINI_API_KEY=AIzaSyBI-WX9MQaiWyMwmwHoZS48gNu0e9Pu6P0
 
       # If required, use the Cloud Run url output in later steps

@@ -55,7 +55,7 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
         contents: [
           {
             parts: [
-              { text: `Image URL: ${imageUrl}\nYOLO Result: ${JSON.stringify(yoloData.predictions)}\nCategory: ${category}\nPrompt: Validate the e-waste category, provide up to 3 short suggestions, a description (max 40 words), and a risk level (1-10) In Indonesian.` }
+              { text: `Image URL: ${imageUrl}\nYOLO Result: ${JSON.stringify(yoloData.predictions)}\nCategory: ${category}\nPrompt: Validasi kategori e-waste, berikan hingga 3 saran singkat, deskripsi (maks 40 kata), dan tingkat risiko (1-10).\nBalas hanya dengan format berikut (tanpa penjelasan tambahan):\n\nDeskripsi: <deskripsi singkat maksimal 40 kata>\nSaran: <saran1 maksimal 10 kata>, <saran2 maksimal 10 kata>, <saran3 maksimal 10 kata >\nTingkat Risiko: <angka 1-10>` }
             ]
           }
         ]
@@ -63,25 +63,13 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
       const geminiData = geminiRes.data as any;
       const generatedText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       console.log("Gemini generated text:", generatedText);
-      // Parse the generated text for description, suggestions, and risk level (Markdown aware, Indonesian)
-      // Extract Description
-      const descriptionMatch = generatedText.match(/\*\*Deskripsi:\*\*\s*(.+)/i);
+      // Parse the generated text for description, suggestions, and risk level (strict template)
+      const descriptionMatch = generatedText.match(/Deskripsi:\s*(.+)/i);
       description = descriptionMatch ? descriptionMatch[1].trim() : undefined;
-      // Extract Risk Level (matches both '**Tingkat Risiko (1-10):** 8' and '**Tingkat Risiko:** 8/10')
-      const riskMatch = generatedText.match(/\*\*Tingkat Risiko(?: \(1-10\))?:\*\*\s*(\d+)/i);
+      const suggestionMatch = generatedText.match(/Saran:\s*(.+)/i);
+      suggestion = suggestionMatch ? suggestionMatch[1].split(',').map((s: string) => s.trim()).slice(0, 3) : [];
+      const riskMatch = generatedText.match(/Tingkat Risiko:\s*(\d+)/i);
       risk_lvl = riskMatch ? parseInt(riskMatch[1], 10) : undefined;
-      // Extract Suggestions (Markdown bullet list under '**Saran:**')
-      const suggestionsSection = generatedText.split('**Saran:**')[1];
-      suggestion = [];
-      if (suggestionsSection) {
-        suggestion = suggestionsSection
-          .split('\n')
-          .map((line: string) => line.trim())
-          .filter((line: string) => /^\d+\.\s+/.test(line))
-          .map((line: string) => line.replace(/^\d+\.\s+/, '').trim())
-          .filter((line: string) => Boolean(line))
-          .slice(0, 3);
-      }
       // Enforce limits
       if (description) {
         description = description.split(' ').slice(0, 40).join(' ');

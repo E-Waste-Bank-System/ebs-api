@@ -46,4 +46,15 @@ export async function deleteDetection(id: string) {
     .delete()
     .eq('id', id);
   if (error) throw error;
+}
+
+export async function updateDetection(id: string, fields: Partial<Detection>) {
+  const { data, error } = await supabase
+    .from('detections')
+    .update(fields)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 } 

@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { verifyToken } from '../utils/token';
+import { verifyToken, TokenPayload } from '../utils/token';
 
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: TokenPayload;
 }
 
 const requireAuth: RequestHandler = (req, res, next) => {

@@ -87,3 +87,32 @@ Cloud Run integrates with Cloud Logging and Error Reporting by default. Check lo
 ## License
 
 MIT
+
+## Dashboard Integration
+
+This API powers the [ebs-web](../ebs-web) dashboard, providing endpoints for:
+- Statistics (for dashboard metrics and charts)
+- Article CRUD (create, read, update, delete)
+- Detection and validation management
+- User authentication and profile
+
+## Key Endpoints
+
+- `GET /stats` — Dashboard statistics (articles, detections, users, etc.)
+- `GET /articles` — List articles (with pagination, search)
+- `POST /articles` — Create article (with image upload)
+- `PUT /articles/:id` — Update article
+- `DELETE /articles/:id` — Delete article
+- `GET /detections` — List e-waste detections
+- `POST /detections/:id/validate` — Validate a detection
+- `GET /validations` — List validations
+
+See [Swagger UI](http://localhost:5000/api/docs) for full API documentation.
+
+## Authentication
+
+All admin dashboard features require authentication via JWT. The web app will automatically attach the token after login.
+
+## Connecting with ebs-web
+
+The [ebs-web](../ebs-web) frontend is designed to work seamlessly with this API. Make sure both are running and configured to use the correct API base URL in `.env.local`.

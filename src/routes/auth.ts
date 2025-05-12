@@ -49,7 +49,8 @@ const router = Router();
  */
 
 const loginSchema = z.object({
-  user_id: z.string().uuid(),
+  email: z.string().email(),
+  password: z.string().min(1),
 });
 
 router.post('/login', validate(loginSchema), login);

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import upload from '../middlewares/upload';
 import { isAuthenticated, isAdmin } from '../middlewares/role';
 import * as detectionController from '../controllers/detectionController';
+import { updateDetection } from '../controllers/detectionController';
 
 const router = Router();
 
@@ -136,5 +137,6 @@ router.get('/', isAdmin, detectionController.getAllDetections);
 router.get('/user/:userId', isAuthenticated, detectionController.getDetectionsByUser);
 router.get('/:id', isAuthenticated, detectionController.getDetectionById);
 router.delete('/:id', isAuthenticated, detectionController.deleteDetection);
+router.patch('/:id', isAdmin, updateDetection);
 
 export default router; 

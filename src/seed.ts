@@ -1,7 +1,7 @@
 import supabase from './utils/supabase';
 
 // Get user_id from environment variable or command line argument
-const user_id = process.env.ADMIN_USER_ID || '319a4fe8-df61-46ef-a591-543b9d70c966';
+const user_id = process.env.ADMIN_USER_ID || 'd0ac0ecb-b4d7-4d81-bcd7-c0bcec391527';
 const name = 'Admin User';
 
 if (!user_id) {

@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import { isAdminUser, getUserById } from '../services/authService';
+import supabase from '../utils/supabase';
+import { isAdminUser } from '../services/authService';
 import { signToken } from '../utils/token';
 
 /**
  * @swagger
  * /auth/login:
  *   post:
- *     summary: Login with Supabase Auth user_id
+ *     summary: Login as admin (Supabase Auth email/password)
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -15,9 +16,12 @@ import { signToken } from '../utils/token';
  *           schema:
  *             type: object
  *             properties:
- *               user_id:
+ *               email:
  *                 type: string
- *                 format: uuid
+ *                 format: email
+ *               password:
+ *                 type: string
+ *                 format: password
  *     responses:
  *       200:
  *         description: Login successful
@@ -31,6 +35,8 @@ import { signToken } from '../utils/token';
  *                   properties:
  *                     id:
  *                       type: string
+ *                     email:
+ *                       type: string
  *                     is_admin:
  *                       type: boolean
  *                 token:
@@ -40,15 +46,26 @@ import { signToken } from '../utils/token';
  */
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { user_id } = req.body;
-    // Fetch user details
-    const user = await getUserById(user_id);
-    if (!user || !user.is_admin) {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      res.status(400).json({ message: 'Email and password are required' });
+      return;
+    }
+    // Authenticate with Supabase Auth
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.user) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
     }
-    const token = signToken({ id: user.id, is_admin: user.is_admin });
-    res.json({ user: { id: user.id, is_admin: user.is_admin }, token });
+    const user_id = data.user.id;
+    // Check if user is admin
+    const isAdmin = await isAdminUser(user_id);
+    if (!isAdmin) {
+      res.status(401).json({ message: 'Invalid credentials' });
+      return;
+    }
+    const token = signToken({ id: user_id, user: { id: user_id, email, is_admin: true } });
+    res.json({ user: { id: user_id, email, is_admin: true }, token });
   } catch (err: unknown) {
     next(err);
   }

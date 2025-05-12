@@ -58,10 +58,10 @@ export async function loginWithGoogle(idToken: string) {
 }
 
 // Fetch user details by user_id
-export async function getUserById(user_id: string): Promise<User | null> {
+export async function getUserById(user_id: string): Promise<{ id: string; email: string } | null> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, is_admin')
+    .select('id, email')
     .eq('id', user_id)
     .single();
   if (error || !data) return null;

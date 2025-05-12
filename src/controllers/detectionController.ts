@@ -9,6 +9,10 @@ import { AuthRequest } from '../middlewares/auth';
 
 export async function createDetection(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
+    if (!req.user || !req.user.id) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
     if (!req.file) {
       res.status(400).json({ message: 'Image file is required' });
       return;
@@ -67,6 +71,17 @@ export async function deleteDetection(req: Request, res: Response, next: NextFun
   try {
     await detectionService.deleteDetection(req.params.id);
     res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateDetection(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const fields = req.body;
+    const updated = await detectionService.updateDetection(id, fields);
+    res.json(updated);
   } catch (err) {
     next(err);
   }

@@ -12,7 +12,6 @@ import sanitize from './middlewares/sanitize';
 // Route imports
 import authRoutes from './routes/auth';
 import articleRoutes from './routes/article';
-import reportRoutes from './routes/report';
 import fs from 'fs';
 import path from 'path';
 import detectionRoutes from './routes/detection';
@@ -21,6 +20,7 @@ import { getStatistics } from './controllers/statisticsController';
 import userRoutes from './routes/user';
 import upload from './middlewares/upload';
 import { uploadFile } from './controllers/uploadController';
+import ewasteRoutes from './routes/ewaste';
 
 const app = express();
 
@@ -108,12 +108,12 @@ app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
-app.use('/api/reports', reportRoutes);
 app.use('/api/detections', detectionRoutes);
 app.use('/api/validations', validationRoutes);
 app.get('/api/stats', getStatistics);
 app.use('/api/admins', userRoutes);
 app.post('/api/upload', upload.single('image'), uploadFile);
+app.use('/api/ewaste', ewasteRoutes);
 
 // Error handling
 app.use(errorHandler);

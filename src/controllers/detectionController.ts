@@ -6,6 +6,7 @@ import env from '../config/env';
 import axios from 'axios';
 import { getErrorMessage } from '../utils/error-utils';
 import { AuthRequest } from '../middlewares/auth';
+import FormData from 'form-data';
 
 export async function createDetection(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -19,8 +20,12 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     }
     // Upload image to GCS
     const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
-    // Call YOLO API (cv_model/predict)
-    const yoloRes = await axios.post(env.yoloUrl, { imageUrl });
+    // Call YOLO API (cv_model/predict) with multipart/form-data
+    const formData = new FormData();
+    formData.append('file', req.file.buffer, req.file.originalname);
+    const yoloRes = await axios.post(env.yoloUrl, formData, {
+      headers: formData.getHeaders(),
+    });
     const yoloData = yoloRes.data as any;
     const yoloPred = yoloData.predictions && yoloData.predictions[0];
     const category = yoloPred?.class ? String(yoloPred.class) : '';

@@ -13,7 +13,6 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1),
   YOLO_URL: z.string().url(),
   REGRESSION_URL: z.string().url(),
-  GEMINI_URL: z.string().url(),
   GEMINI_API_KEY: z.string().min(1),
   CLIENT_ORIGIN: z.string().url().optional(),
 });
@@ -30,7 +29,6 @@ const config = {
   googleClientId: _env.GOOGLE_CLIENT_ID,
   yoloUrl: _env.YOLO_URL,
   regressionUrl: _env.REGRESSION_URL,
-  geminiUrl: _env.GEMINI_URL,
   geminiApiKey: _env.GEMINI_API_KEY,
   clientOrigin: _env.CLIENT_ORIGIN,
 };

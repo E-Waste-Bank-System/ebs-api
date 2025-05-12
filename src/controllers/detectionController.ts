@@ -8,6 +8,11 @@ import { getErrorMessage } from '../utils/error-utils';
 import { AuthRequest } from '../middlewares/auth';
 import FormData from 'form-data';
 
+// Map YOLO class index to category name
+const CLASS_NAMES = [
+  'Battery', 'Body Weight Scale', 'Calculator', 'Clock', 'DVD Player', 'DVD ROM', 'Electronic Socket', 'Fan', 'Flashlight', 'Fridge', 'GPU', 'Handphone', 'Harddisk', 'Insect Killer', 'Iron', 'Keyboard', 'Lamp', 'Laptop', 'Laptop Charger', 'Microphone', 'Microwave', 'Monitor', 'Motherboard', 'Mouse', 'PC Case', 'Power Supply', 'Powerbank', 'Printer', 'Printer Ink', 'Radio', 'Rice Cooker', 'Router', 'Solar Panel', 'Speaker', 'Television', 'Toaster', 'Walkie Talkie', 'Washing Machine'
+];
+
 export async function createDetection(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.user || !req.user.id) {
@@ -28,7 +33,8 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     });
     const yoloData = yoloRes.data as any;
     const yoloPred = yoloData.predictions && yoloData.predictions[0];
-    const category = yoloPred?.class ? String(yoloPred.class) : '';
+    const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
+    const category = (classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) ? CLASS_NAMES[classIdx] : '';
     const confidence = yoloPred?.confidence ?? null;
     // Call regression API (optional, fallback to null)
     let regression_result: number | undefined = undefined;
@@ -44,18 +50,38 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     // Call Gemini API for validation, description, suggestion, risk_lvl
     let description: string | undefined = undefined, suggestion: string[] = [], risk_lvl: number | undefined = undefined, validatedCategory: string = category;
     try {
-      const geminiRes = await axios.post(env.geminiUrl, {
-        image_url: imageUrl,
-        yolo_result: yoloData.predictions,
-        prompt: "Validate the e-waste category, provide up to 3 short suggestions, a description (max 40 words), and a risk level (1-10)."
-      }, {
-        headers: { 'Authorization': `Bearer ${env.geminiApiKey}` }
+      const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
+      const geminiRes = await axios.post(GEMINI_API_URL, {
+        contents: [
+          {
+            parts: [
+              { text: `Image URL: ${imageUrl}\nYOLO Result: ${JSON.stringify(yoloData.predictions)}\nCategory: ${category}\nPrompt: Validate the e-waste category, provide up to 3 short suggestions, a description (max 40 words), and a risk level (1-10) In Indonesian.` }
+            ]
+          }
+        ]
       });
       const geminiData = geminiRes.data as any;
-      validatedCategory = geminiData.validated_category ?? category;
-      description = geminiData.description ?? undefined;
-      suggestion = Array.isArray(geminiData.suggestion) ? geminiData.suggestion : (geminiData.suggestion ? [geminiData.suggestion] : []);
-      risk_lvl = geminiData.risk_lvl ?? undefined;
+      const generatedText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      console.log("Gemini generated text:", generatedText);
+      // Parse the generated text for description, suggestions, and risk level (Markdown aware, Indonesian)
+      // Extract Description
+      const descriptionMatch = generatedText.match(/\*\*Deskripsi:\*\*\s*(.+)/i);
+      description = descriptionMatch ? descriptionMatch[1].trim() : undefined;
+      // Extract Risk Level (matches both '**Tingkat Risiko (1-10):** 8' and '**Tingkat Risiko:** 8/10')
+      const riskMatch = generatedText.match(/\*\*Tingkat Risiko(?: \(1-10\))?:\*\*\s*(\d+)/i);
+      risk_lvl = riskMatch ? parseInt(riskMatch[1], 10) : undefined;
+      // Extract Suggestions (Markdown bullet list under '**Saran:**')
+      const suggestionsSection = generatedText.split('**Saran:**')[1];
+      suggestion = [];
+      if (suggestionsSection) {
+        suggestion = suggestionsSection
+          .split('\n')
+          .map((line: string) => line.trim())
+          .filter((line: string) => /^\d+\.\s+/.test(line))
+          .map((line: string) => line.replace(/^\d+\.\s+/, '').trim())
+          .filter((line: string) => Boolean(line))
+          .slice(0, 3);
+      }
       // Enforce limits
       if (description) {
         description = description.split(' ').slice(0, 40).join(' ');
@@ -67,6 +93,8 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
         risk_lvl = Math.max(1, Math.min(10, Math.round(risk_lvl)));
       }
     } catch (err) {
+      const error = err as any;
+      console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
       description = undefined;
       suggestion = [];
       risk_lvl = undefined;

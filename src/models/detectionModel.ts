@@ -8,5 +8,6 @@ export interface Detection {
   description?: string;
   suggestion?: string;
   risk_lvl?: number;
+  detection_source?: string;
   created_at: string;
 } 

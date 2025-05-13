@@ -20,6 +20,48 @@ export async function getAllDetections() {
   return data || [];
 }
 
+export async function getAllDetectionsWithFilters(
+  limit: number,
+  offset: number,
+  search?: string,
+  category?: string,
+  detection_source?: string
+) {
+  let query = supabase
+    .from('detections')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false });
+
+  // Apply filters if provided
+  if (search) {
+    query = query.or(`category.ilike.%${search}%,description.ilike.%${search}%`);
+  }
+  
+  if (category) {
+    query = query.eq('category', category);
+  }
+  
+  if (detection_source) {
+    query = query.eq('detection_source', detection_source);
+  }
+  
+  // Apply pagination
+  query = query.range(offset, offset + limit - 1);
+  
+  const { data, count, error } = await query;
+  
+  if (error) throw error;
+  
+  const total = count || 0;
+  const last_page = Math.ceil(total / limit);
+  
+  return {
+    data: data || [],
+    total,
+    last_page
+  };
+}
+
 export async function getDetectionsByUser(userId: string) {
   const { data, error } = await supabase
     .from('detections')
@@ -46,6 +88,7 @@ export async function deleteDetection(id: string) {
     .delete()
     .eq('id', id);
   if (error) throw error;
+  return true;
 }
 
 export async function updateDetection(id: string, fields: Partial<Detection>) {

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import * as detectionService from '../services/detectionService';
+import { getAllDetectionsWithFilters } from '../services/detectionService';
 import { uploadImage } from '../utils/gcs';
 import env from '../config/env';
 import axios from 'axios';
@@ -49,7 +50,14 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     const yoloPred = yoloData.predictions && yoloData.predictions[0];
     const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
     let category = (classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) ? CLASS_NAMES[classIdx] : '';
-    const confidence = yoloPred?.confidence ?? null;
+    
+    // Set a default low confidence value if YOLO doesn't return one
+    // This ensures we don't violate the NOT NULL constraint in the database
+    const confidence = yoloPred?.confidence !== undefined ? yoloPred.confidence : 0.1;
+    
+    // Set default detection source to YOLO
+    let detectionSource = 'YOLO';
+    
     // Call regression API (optional, fallback to null)
     let regression_result: number | undefined = undefined;
     try {
@@ -70,7 +78,8 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
       
       // Different prompt based on confidence level
       let prompt = '';
-      const useLowConfidencePrompt = confidence === null || confidence < 0.65;
+      // If YOLO didn't detect a class or has low confidence, always use the low confidence prompt
+      const useLowConfidencePrompt = classIdx === null || confidence < 0.65;
       
       if (useLowConfidencePrompt) {
         prompt = `Analyze this e-waste image and classify it into one of these categories: ${CLASS_NAMES.join(', ')}.
@@ -119,12 +128,14 @@ Risk Level: <number 1-10>`;
           // Check if it's one of our valid categories
           if (CLASS_NAMES.includes(geminiCategory)) {
             validatedCategory = geminiCategory;
+            detectionSource = 'Gemini Interfered'; // Gemini intervened to correct the category
           } else {
             // Find closest match if needed
             const closestMatch = CLASS_NAMES.find(name => 
               name.toLowerCase() === geminiCategory.toLowerCase());
             if (closestMatch) {
               validatedCategory = closestMatch;
+              detectionSource = 'Gemini Interfered'; // Gemini intervened to correct the category
             }
           }
         }
@@ -181,29 +192,72 @@ Risk Level: <number 1-10>`;
       suggestion = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
       risk_lvl = undefined;
       validatedCategory = category;
+      // Keep detectionSource as 'YOLO' since we're falling back to YOLO's category
     }
     // Save detection
     const detection = await detectionService.createDetection({
       id: uuidv4(),
       user_id: req.user.id,
       image_url: imageUrl,
-      category: validatedCategory,
-      confidence,
+      category: validatedCategory || 'Unknown', // Ensure we have a category value
+      confidence, // Now always has a default value of 0.1 if missing
       regression_result,
       description,
       suggestion: suggestion.join(' | '), // Store as string, or change DB to array if supported
-      risk_lvl,
+      risk_lvl: risk_lvl || 1, // Default to lowest risk if not provided
+      detection_source: detectionSource, // Include the detection source
     });
     res.status(201).json(detection);
   } catch (err) {
-    next(err);
+    // Provide more detailed error information
+    const error = err as any;
+    console.error('Detection creation failed:', {
+      error: error?.message || 'Unknown error',
+      stack: error?.stack,
+      response: error?.response?.data,
+      sqlMessage: error?.message || '',
+    });
+    
+    // Return a more user-friendly error
+    if (error?.code === '23502' || error?.message?.includes('not-null constraint')) {
+      // Handle database not-null constraint violations
+      res.status(500).json({ 
+        message: 'Failed to create detection due to missing required information',
+        details: 'The system could not process the image properly. Please try with a clearer image.'
+      });
+    } else {
+      next(err);
+    }
   }
 }
 
 export async function getAllDetections(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await detectionService.getAllDetections();
-    res.json(data);
+    // Get query parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (page - 1) * limit;
+    const search = req.query.search as string;
+    const category = req.query.category as string;
+    const detection_source = req.query.detection_source as string;
+
+    // Call service with filter parameters
+    const { data, total, last_page } = await getAllDetectionsWithFilters(
+      limit, 
+      offset, 
+      search, 
+      category, 
+      detection_source
+    );
+
+    // Return paginated response
+    res.json({
+      data,
+      total,
+      current_page: page,
+      last_page,
+      per_page: limit
+    });
   } catch (err) {
     next(err);
   }

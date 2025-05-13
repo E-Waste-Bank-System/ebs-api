@@ -13,6 +13,20 @@ const CLASS_NAMES = [
   'Battery', 'Body Weight Scale', 'Calculator', 'Clock', 'DVD Player', 'DVD ROM', 'Electronic Socket', 'Fan', 'Flashlight', 'Fridge', 'GPU', 'Handphone', 'Harddisk', 'Insect Killer', 'Iron', 'Keyboard', 'Lamp', 'Laptop', 'Laptop Charger', 'Microphone', 'Microwave', 'Monitor', 'Motherboard', 'Mouse', 'PC Case', 'Power Supply', 'Powerbank', 'Printer', 'Printer Ink', 'Radio', 'Rice Cooker', 'Router', 'Solar Panel', 'Speaker', 'Television', 'Toaster', 'Walkie Talkie', 'Washing Machine'
 ];
 
+// Default suggestions for each category if Gemini response is too short
+const DEFAULT_SUGGESTIONS: { [key: string]: string[] } = {
+  'Battery': [
+    'Bawa ke tempat daur ulang khusus baterai',
+    'Lindungi terminal baterai dengan isolasi sebelum dibuang',
+    'Jangan membuang baterai di tempat sampah biasa'
+  ],
+  'default': [
+    'Bawa ke pusat daur ulang elektronik terdekat',
+    'Pisahkan komponen sebelum mendaur ulang dengan benar',
+    'Jangan membuang di tempat sampah rumah tangga'
+  ]
+};
+
 export async function createDetection(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.user || !req.user.id) {
@@ -34,7 +48,7 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     const yoloData = yoloRes.data as any;
     const yoloPred = yoloData.predictions && yoloData.predictions[0];
     const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
-    const category = (classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) ? CLASS_NAMES[classIdx] : '';
+    let category = (classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) ? CLASS_NAMES[classIdx] : '';
     const confidence = yoloPred?.confidence ?? null;
     // Call regression API (optional, fallback to null)
     let regression_result: number | undefined = undefined;
@@ -50,38 +64,121 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     let description: string | undefined = undefined, suggestion: string[] = [], risk_lvl: number | undefined = undefined, validatedCategory: string = category;
     try {
       const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
+      
+      // Convert buffer to base64
+      const imageBase64 = req.file.buffer.toString('base64');
+      
+      // Different prompt based on confidence level
+      let prompt = '';
+      const useLowConfidencePrompt = confidence === null || confidence < 0.65;
+      
+      if (useLowConfidencePrompt) {
+        prompt = `Analyze this e-waste image and classify it into one of these categories: ${CLASS_NAMES.join(', ')}.
+Then provide a description (10-40 words), up to 3 suggestions for handling, and a risk level (1-10).
+Respond in this exact format without additional explanations:
+
+Category: <1-2 word of category>
+Description: <short description 10-40 words in indonesian>
+Suggestions: <suggestion1 exactly 7-15 words in indonesian>, <suggestion2 exactly 7-15 words in indonesian>, <suggestion3 exactly 7-15 words in indonesian>
+Risk Level: <number 1-10>`;
+      } else {
+        prompt = `This image shows a ${category} e-waste item with ${(confidence * 100).toFixed(2)}% detection confidence.
+Provide a description (10-40 words), up to 3 suggestions for handling, and a risk level (1-10).
+Respond in this exact format without additional explanations:
+
+Description: <short description 10-40 words in indonesian>
+Suggestions: <suggestion1 exactly 7-15 words in indonesian>, <suggestion2 exactly 7-15 words in indonesian>, <suggestion3 exactly 7-15 words in indonesian>
+Risk Level: <number 1-10>`;
+      }
+      
       const geminiRes = await axios.post(GEMINI_API_URL, {
         contents: [
           {
             parts: [
-              { text: `Image URL: ${imageUrl}\nYOLO Result: ${JSON.stringify(yoloData.predictions)}\nCategory: ${category}\nPrompt: Validasi kategori e-waste, berikan hingga 3 saran singkat, deskripsi (maks 40 kata), dan tingkat risiko (1-10).\nBalas hanya dengan format berikut (tanpa penjelasan tambahan):\n\nDeskripsi: <deskripsi singkat maksimal 40 kata>\nSaran: <saran1 maksimal 10 kata>, <saran2 maksimal 10 kata>, <saran3 maksimal 10 kata >\nTingkat Risiko: <angka 1-10>` }
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: req.file.mimetype,
+                  data: imageBase64
+                }
+              }
             ]
           }
         ]
       });
+      
       const geminiData = geminiRes.data as any;
       const generatedText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       console.log("Gemini generated text:", generatedText);
-      const descriptionMatch = generatedText.match(/Deskripsi:\s*(.+)/i);
+      
+      // Extract category if confidence is low
+      if (useLowConfidencePrompt) {
+        const categoryMatch = generatedText.match(/Category:\s*(.+?)(?=\n|$)/i);
+        if (categoryMatch && categoryMatch[1]) {
+          const geminiCategory = categoryMatch[1].trim();
+          // Check if it's one of our valid categories
+          if (CLASS_NAMES.includes(geminiCategory)) {
+            validatedCategory = geminiCategory;
+          } else {
+            // Find closest match if needed
+            const closestMatch = CLASS_NAMES.find(name => 
+              name.toLowerCase() === geminiCategory.toLowerCase());
+            if (closestMatch) {
+              validatedCategory = closestMatch;
+            }
+          }
+        }
+      }
+      
+      const descriptionMatch = generatedText.match(/Description:\s*(.+?)(?=\n|$)/i);
       description = descriptionMatch ? descriptionMatch[1].trim() : undefined;
-      const suggestionMatch = generatedText.match(/Saran:\s*(.+)/i);
-      suggestion = suggestionMatch ? suggestionMatch[1].split(',').map((s: string) => s.trim()).slice(0, 3) : [];
-      const riskMatch = generatedText.match(/Tingkat Risiko:\s*(\d+)/i);
+      
+      const suggestionMatch = generatedText.match(/Suggestions:\s*(.+?)(?=\n|$)/i);
+      
+      if (suggestionMatch && suggestionMatch[1]) {
+        suggestion = suggestionMatch[1].split(',').map((s: string) => s.trim()).slice(0, 3);
+        
+        // Check if suggestions meet minimum word count and replace if needed
+        suggestion = suggestion.map((sugg, index) => {
+          const wordCount = sugg.split(/\s+/).filter(word => word.length > 0).length;
+          if (wordCount < 5) {
+            // Use default suggestion based on category or fallback to generic
+            const defaultArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
+            return defaultArray[index % defaultArray.length];
+          }
+          return sugg;
+        });
+        
+        // If we have fewer than 3 suggestions, add default ones
+        while (suggestion.length < 3) {
+          const defaultArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
+          suggestion.push(defaultArray[suggestion.length % defaultArray.length]);
+        }
+      } else {
+        // No suggestions found, use defaults
+        suggestion = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
+      }
+      
+      const riskMatch = generatedText.match(/Risk Level:\s*(\d+)/i);
       risk_lvl = riskMatch ? parseInt(riskMatch[1], 10) : undefined;
+      
       if (description) {
         description = description.split(' ').slice(0, 40).join(' ');
       }
+      
       if (Array.isArray(suggestion)) {
         suggestion = suggestion.slice(0, 3);
       }
+      
       if (typeof risk_lvl === 'number') {
         risk_lvl = Math.max(1, Math.min(10, Math.round(risk_lvl)));
       }
+      
     } catch (err) {
       const error = err as any;
       console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
       description = undefined;
-      suggestion = [];
+      suggestion = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
       risk_lvl = undefined;
       validatedCategory = category;
     }

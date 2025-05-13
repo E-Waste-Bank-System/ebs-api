@@ -47,7 +47,6 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     } catch (err) {
       regression_result = undefined;
     }
-    // Call Gemini API for validation, description, suggestion, risk_lvl
     let description: string | undefined = undefined, suggestion: string[] = [], risk_lvl: number | undefined = undefined, validatedCategory: string = category;
     try {
       const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
@@ -63,14 +62,12 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
       const geminiData = geminiRes.data as any;
       const generatedText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       console.log("Gemini generated text:", generatedText);
-      // Parse the generated text for description, suggestions, and risk level (strict template)
       const descriptionMatch = generatedText.match(/Deskripsi:\s*(.+)/i);
       description = descriptionMatch ? descriptionMatch[1].trim() : undefined;
       const suggestionMatch = generatedText.match(/Saran:\s*(.+)/i);
       suggestion = suggestionMatch ? suggestionMatch[1].split(',').map((s: string) => s.trim()).slice(0, 3) : [];
       const riskMatch = generatedText.match(/Tingkat Risiko:\s*(\d+)/i);
       risk_lvl = riskMatch ? parseInt(riskMatch[1], 10) : undefined;
-      // Enforce limits
       if (description) {
         description = description.split(' ').slice(0, 40).join(' ');
       }

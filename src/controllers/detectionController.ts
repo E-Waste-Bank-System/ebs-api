@@ -88,7 +88,7 @@ Respond in this exact format without additional explanations:
 
 Category: <1-2 word of category>
 Description: <short description 10-40 words in indonesian>
-Suggestions: <suggestion1 exactly 7-15 words in indonesian>, <suggestion2 exactly 7-15 words in indonesian>, <suggestion3 exactly 7-15 words in indonesian>
+Suggestions: <suggestion1 exactly 10-20 words in indonesian>, <suggestion2 exactly 10-20 words in indonesian>, <suggestion3 exactly 7-15 words in indonesian>
 Risk Level: <number 1-10>`;
       } else {
         prompt = `This image shows a ${category} e-waste item with ${(confidence * 100).toFixed(2)}% detection confidence.
@@ -113,7 +113,13 @@ Risk Level: <number 1-10>`;
               }
             ]
           }
-        ]
+        ],
+        generationConfig: {
+          temperature: 0.9,
+          topP: 0.8,
+          topK: 40,
+          maxOutputTokens: 1000
+        }
       });
       
       const geminiData = geminiRes.data as any;

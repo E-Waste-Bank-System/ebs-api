@@ -9,12 +9,10 @@ import { getErrorMessage } from '../utils/error-utils';
 import { AuthRequest } from '../middlewares/auth';
 import FormData from 'form-data';
 
-// Map YOLO class index to category name
 const CLASS_NAMES = [
   'Battery', 'Body Weight Scale', 'Calculator', 'Clock', 'DVD Player', 'DVD ROM', 'Electronic Socket', 'Fan', 'Flashlight', 'Fridge', 'GPU', 'Handphone', 'Harddisk', 'Insect Killer', 'Iron', 'Keyboard', 'Lamp', 'Laptop', 'Laptop Charger', 'Microphone', 'Microwave', 'Monitor', 'Motherboard', 'Mouse', 'PC Case', 'Power Supply', 'Powerbank', 'Printer', 'Printer Ink', 'Radio', 'Rice Cooker', 'Router', 'Solar Panel', 'Speaker', 'Television', 'Toaster', 'Walkie Talkie', 'Washing Machine'
 ];
 
-// Default suggestions for each category if Gemini response is too short
 const DEFAULT_SUGGESTIONS: { [key: string]: string[] } = {
   'Battery': [
     'Bawa ke tempat daur ulang khusus baterai',
@@ -38,9 +36,7 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
       res.status(400).json({ message: 'Image file is required' });
       return;
     }
-    // Upload image to GCS
     const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
-    // Call YOLO API (cv_model/predict) with multipart/form-data
     const formData = new FormData();
     formData.append('file', req.file.buffer, req.file.originalname);
     const yoloRes = await axios.post(env.yoloUrl, formData, {
@@ -51,14 +47,10 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
     let category = (classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) ? CLASS_NAMES[classIdx] : '';
     
-    // Set a default low confidence value if YOLO doesn't return one
-    // This ensures we don't violate the NOT NULL constraint in the database
     const confidence = yoloPred?.confidence !== undefined ? yoloPred.confidence : 0.1;
     
-    // Set default detection source to YOLO
     let detectionSource = 'YOLO';
     
-    // Call regression API (optional, fallback to null)
     let regression_result: number | undefined = undefined;
     try {
       if (category && confidence !== null) {
@@ -73,12 +65,9 @@ export async function createDetection(req: AuthRequest, res: Response, next: Nex
     try {
       const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
       
-      // Convert buffer to base64
       const imageBase64 = req.file.buffer.toString('base64');
       
-      // Different prompt based on confidence level
       let prompt = '';
-      // If YOLO didn't detect a class or has low confidence, always use the low confidence prompt
       const useLowConfidencePrompt = classIdx === null || confidence < 0.65;
       
       if (useLowConfidencePrompt) {
@@ -126,22 +115,19 @@ Risk Level: <number 1-10>`;
       const generatedText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       console.log("Gemini generated text:", generatedText);
       
-      // Extract category if confidence is low
       if (useLowConfidencePrompt) {
         const categoryMatch = generatedText.match(/Category:\s*(.+?)(?=\n|$)/i);
         if (categoryMatch && categoryMatch[1]) {
           const geminiCategory = categoryMatch[1].trim();
-          // Check if it's one of our valid categories
           if (CLASS_NAMES.includes(geminiCategory)) {
             validatedCategory = geminiCategory;
-            detectionSource = 'Gemini Interfered'; // Gemini intervened to correct the category
+            detectionSource = 'Gemini Interfered';
           } else {
-            // Find closest match if needed
             const closestMatch = CLASS_NAMES.find(name => 
               name.toLowerCase() === geminiCategory.toLowerCase());
             if (closestMatch) {
               validatedCategory = closestMatch;
-              detectionSource = 'Gemini Interfered'; // Gemini intervened to correct the category
+              detectionSource = 'Gemini Interfered';
             }
           }
         }
@@ -155,24 +141,20 @@ Risk Level: <number 1-10>`;
       if (suggestionMatch && suggestionMatch[1]) {
         suggestion = suggestionMatch[1].split(',').map((s: string) => s.trim()).slice(0, 3);
         
-        // Check if suggestions meet minimum word count and replace if needed
         suggestion = suggestion.map((sugg, index) => {
           const wordCount = sugg.split(/\s+/).filter(word => word.length > 0).length;
           if (wordCount < 5) {
-            // Use default suggestion based on category or fallback to generic
             const defaultArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
             return defaultArray[index % defaultArray.length];
           }
           return sugg;
         });
         
-        // If we have fewer than 3 suggestions, add default ones
         while (suggestion.length < 3) {
           const defaultArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
           suggestion.push(defaultArray[suggestion.length % defaultArray.length]);
         }
       } else {
-        // No suggestions found, use defaults
         suggestion = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
       }
       
@@ -198,24 +180,21 @@ Risk Level: <number 1-10>`;
       suggestion = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
       risk_lvl = undefined;
       validatedCategory = category;
-      // Keep detectionSource as 'YOLO' since we're falling back to YOLO's category
     }
-    // Save detection
     const detection = await detectionService.createDetection({
       id: uuidv4(),
       user_id: req.user.id,
       image_url: imageUrl,
-      category: validatedCategory || 'Unknown', // Ensure we have a category value
-      confidence, // Now always has a default value of 0.1 if missing
+      category: validatedCategory || 'Unknown',
+      confidence,
       regression_result,
       description,
-      suggestion: suggestion.join(' | '), // Store as string, or change DB to array if supported
-      risk_lvl: risk_lvl || 1, // Default to lowest risk if not provided
-      detection_source: detectionSource, // Include the detection source
+      suggestion: suggestion.join(' | '),
+      risk_lvl: risk_lvl || 1,
+      detection_source: detectionSource,
     });
     res.status(201).json(detection);
   } catch (err) {
-    // Provide more detailed error information
     const error = err as any;
     console.error('Detection creation failed:', {
       error: error?.message || 'Unknown error',
@@ -224,9 +203,7 @@ Risk Level: <number 1-10>`;
       sqlMessage: error?.message || '',
     });
     
-    // Return a more user-friendly error
     if (error?.code === '23502' || error?.message?.includes('not-null constraint')) {
-      // Handle database not-null constraint violations
       res.status(500).json({ 
         message: 'Failed to create detection due to missing required information',
         details: 'The system could not process the image properly. Please try with a clearer image.'
@@ -239,7 +216,6 @@ Risk Level: <number 1-10>`;
 
 export async function getAllDetections(req: Request, res: Response, next: NextFunction) {
   try {
-    // Get query parameters
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const offset = (page - 1) * limit;
@@ -247,7 +223,6 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
     const category = req.query.category as string;
     const detection_source = req.query.detection_source as string;
 
-    // Call service with filter parameters
     const { data, total, last_page } = await getAllDetectionsWithFilters(
       limit, 
       offset, 
@@ -255,8 +230,7 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
       category, 
       detection_source
     );
-
-    // Return paginated response
+  
     res.json({
       data,
       total,
@@ -301,6 +275,27 @@ export async function updateDetection(req: Request, res: Response, next: NextFun
     const { id } = req.params;
     const fields = req.body;
     const updated = await detectionService.updateDetection(id, fields);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateDetectionImage(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) {
+      res.status(400).json({ message: 'Image file is required' });
+      return;
+    }
+
+    const { id } = req.params;
+    
+    // Upload image to GCS
+    const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
+    
+    // Update the detection with the new image URL
+    const updated = await detectionService.updateDetection(id, { image_url: imageUrl });
+    
     res.json(updated);
   } catch (err) {
     next(err);

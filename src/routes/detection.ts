@@ -138,5 +138,6 @@ router.get('/user/:userId', isAuthenticated, detectionController.getDetectionsBy
 router.get('/:id', isAuthenticated, detectionController.getDetectionById);
 router.delete('/:id', isAuthenticated, detectionController.deleteDetection);
 router.patch('/:id', isAdmin, updateDetection);
+router.put('/:id/image', isAuthenticated, upload.single('image'), detectionController.updateDetectionImage);
 
 export default router; 

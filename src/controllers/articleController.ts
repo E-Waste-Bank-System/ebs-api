@@ -5,19 +5,15 @@ import { uploadImage } from '../utils/gcs';
 import logger from '../utils/logger';
 import { getErrorMessage } from '../utils/error-utils';
 
-// Helper function for safe filename creation
 function createSafeFilename(originalFilename: string): string {
-  // Extract file extension
   const extension = originalFilename.includes('.') 
     ? originalFilename.split('.').pop() 
     : '';
-  // Create a safe filename with UUID and clean extension
   return `article_${uuidv4()}${extension ? '.' + extension.replace(/[^\w.-]/g, '') : ''}`;
 }
 
 export const getAll: RequestHandler = async (req, res, next) => {
   try {
-    // Use validatedQuery if it exists, otherwise fall back to query for backward compatibility
     const { limit = 10, offset = 0 } = (req as any).validatedQuery || req.query;
     const { data, total } = await articleService.getAll(Number(limit), Number(offset));
     res.json({ data, total });
@@ -75,7 +71,6 @@ export const updateArticle: RequestHandler = async (req, res, next) => {
     logger.debug('updateArticle req.body:', req.body);
     const fields: any = { ...req.body };
     if (req.file) {
-      // Use safe filename generation
       const safeFilename = createSafeFilename(req.file.originalname);
       logger.debug(`Original filename: ${req.file.originalname}, Safe filename: ${safeFilename}`);
       

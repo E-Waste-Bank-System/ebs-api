@@ -51,6 +51,10 @@ const router = Router();
  *               image:
  *                 type: string
  *                 format: binary
+ *               user_id:
+ *                 type: string
+ *                 description: ID of the user creating the detection
+ *                 required: true
  *     responses:
  *       201:
  *         description: Detection result
@@ -59,7 +63,7 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/Detection'
  *       400:
- *         description: Image file is required
+ *         description: Image file is required or user_id is missing
  *   get:
  *     summary: Get all detections (admin only)
  *     tags: [Detections]

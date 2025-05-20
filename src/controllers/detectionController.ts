@@ -32,6 +32,14 @@ export async function createDetection(req: Request, res: Response, next: NextFun
       res.status(400).json({ message: 'Image file is required' });
       return;
     }
+
+    // Get user_id from request body
+    const { user_id } = req.body;
+    if (!user_id) {
+      res.status(400).json({ message: 'user_id is required' });
+      return;
+    }
+
     const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
     const formData = new FormData();
     formData.append('file', req.file.buffer, req.file.originalname);
@@ -177,9 +185,6 @@ Risk Level: <number 1-10>`;
       risk_lvl = undefined;
       validatedCategory = category;
     }
-
-    // Get user_id from request if available, otherwise use null
-    const user_id = (req as AuthRequest).user?.id || null;
 
     const detection = await detectionService.createDetection({
       id: uuidv4(),

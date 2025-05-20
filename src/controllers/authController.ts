@@ -112,14 +112,26 @@ export async function getToken(req: Request, res: Response, next: NextFunction):
       res.status(400).json({ message: 'user_id is required' });
       return;
     }
-    // Fetch user info from DB
-    const user = await getUserById(user_id);
-    if (!user) {
-      res.status(401).json({ message: 'Invalid user_id' });
+
+    // Get user data from Supabase Auth using admin API
+    const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id);
+    if (userError || !user) {
+      res.status(401).json({ message: 'Invalid user' });
       return;
     }
-    const token = signToken({ id: user.id, user: { id: user.id, email: user.email, is_admin: false } });
-    res.json({ user: { id: user.id }, token });
+
+    // Create token payload with the correct structure
+    const tokenPayload = {
+      id: user.id,
+      user: {
+        id: user.id,
+        email: user.email,
+        is_admin: false
+      }
+    };
+
+    const token = signToken(tokenPayload);
+    res.json({ user: { id: user.id, email: user.email }, token });
   } catch (err: unknown) {
     next(err);
   }

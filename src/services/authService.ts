@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { OAuth2Client } from 'google-auth-library';
 import env from '../config/env';
+import { Request, Response, NextFunction } from 'express';
 
 export interface User {
   id: string;
@@ -59,11 +60,7 @@ export async function loginWithGoogle(idToken: string) {
 
 // Fetch user details by user_id
 export async function getUserById(user_id: string): Promise<{ id: string; email: string } | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, email')
-    .eq('id', user_id)
-    .single();
+  const { data, error } = await supabase.auth.admin.getUserById(user_id);
   if (error || !data) return null;
-  return data;
+  return { id: data.id, email: data.email };
 }

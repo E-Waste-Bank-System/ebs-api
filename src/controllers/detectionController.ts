@@ -26,12 +26,8 @@ const DEFAULT_SUGGESTIONS: { [key: string]: string[] } = {
   ]
 };
 
-export async function createDetection(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+export async function createDetection(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    if (!req.user || !req.user.id) {
-      res.status(401).json({ message: 'Unauthorized' });
-      return;
-    }
     if (!req.file) {
       res.status(400).json({ message: 'Image file is required' });
       return;
@@ -181,9 +177,13 @@ Risk Level: <number 1-10>`;
       risk_lvl = undefined;
       validatedCategory = category;
     }
+
+    // Get user_id from request if available, otherwise use null
+    const user_id = (req as AuthRequest).user?.id || null;
+
     const detection = await detectionService.createDetection({
       id: uuidv4(),
-      user_id: req.user.id,
+      user_id,
       image_url: imageUrl,
       category: validatedCategory || 'Unknown',
       confidence,

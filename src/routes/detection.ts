@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import upload from '../middlewares/upload';
-import { isAuthenticated, isAdmin } from '../middlewares/role';
+import { isAdmin } from '../middlewares/role';
 import * as detectionController from '../controllers/detectionController';
 import { updateDetection } from '../controllers/detectionController';
 
@@ -41,7 +41,6 @@ const router = Router();
  *   post:
  *     summary: Upload e-waste image, run detection, and save result
  *     tags: [Detections]
- *     security: [ { bearerAuth: [] } ]
  *     requestBody:
  *       required: true
  *       content:
@@ -132,12 +131,12 @@ const router = Router();
  *       404:
  *         description: Detection not found
  */
-router.post('/', isAuthenticated, upload.single('image'), detectionController.createDetection);
+router.post('/', upload.single('image'), detectionController.createDetection);
 router.get('/', isAdmin, detectionController.getAllDetections);
-router.get('/user/:userId', isAuthenticated, detectionController.getDetectionsByUser);
-router.get('/:id', isAuthenticated, detectionController.getDetectionById);
-router.delete('/:id', isAuthenticated, detectionController.deleteDetection);
+router.get('/user/:userId', detectionController.getDetectionsByUser);
+router.get('/:id', detectionController.getDetectionById);
+router.delete('/:id', detectionController.deleteDetection);
 router.patch('/:id', isAdmin, updateDetection);
-router.put('/:id/image', isAuthenticated, upload.single('image'), detectionController.updateDetectionImage);
+router.put('/:id/image', upload.single('image'), detectionController.updateDetectionImage);
 
 export default router; 

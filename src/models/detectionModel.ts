@@ -1,6 +1,6 @@
 export interface Detection {
   id: string;
-  user_id: string;
+  user_id: string | null;
   image_url: string;
   category: string;
   confidence: number;

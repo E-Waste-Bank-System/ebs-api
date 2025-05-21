@@ -11,6 +11,33 @@ const router = Router();
  *   name: Auth
  *   description: Authentication endpoints
  */
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     AuthResponse:
+ *       type: object
+ *       properties:
+ *         user:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: string
+ *               format: uuid
+ *               description: User ID
+ *             email:
+ *               type: string
+ *               format: email
+ *               description: User email
+ *             is_admin:
+ *               type: boolean
+ *               description: Whether the user is an admin
+ *         token:
+ *           type: string
+ *           description: JWT authentication token
+ */
+
 /**
  * @swagger
  * /auth/login:
@@ -23,32 +50,25 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - email
+ *               - password
  *             properties:
  *               email:
  *                 type: string
  *                 format: email
+ *                 description: Admin email
  *               password:
  *                 type: string
  *                 format: password
+ *                 description: Admin password
  *     responses:
  *       200:
  *         description: Login successful
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     is_admin:
- *                       type: boolean
- *                 token:
- *                   type: string
+ *               $ref: '#/components/schemas/AuthResponse'
  *       401:
  *         description: Invalid credentials
  */
@@ -65,25 +85,20 @@ const router = Router();
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - user_id
  *             properties:
  *               user_id:
  *                 type: string
  *                 format: uuid
+ *                 description: Supabase user ID
  *     responses:
  *       200:
  *         description: Token generated successfully
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                 token:
- *                   type: string
+ *               $ref: '#/components/schemas/AuthResponse'
  *       401:
  *         description: Invalid user_id
  */

@@ -5,7 +5,6 @@ import { getAllDetectionsWithFilters } from '../services/detectionService';
 import { uploadImage } from '../utils/gcs';
 import env from '../config/env';
 import axios from 'axios';
-import { getErrorMessage } from '../utils/error-utils';
 import { AuthRequest } from '../middlewares/auth';
 import FormData from 'form-data';
 
@@ -33,7 +32,6 @@ export async function createDetection(req: Request, res: Response, next: NextFun
       return;
     }
 
-    // Get user_id from request body
     const { user_id } = req.body;
     if (!user_id) {
       res.status(400).json({ message: 'user_id is required' });
@@ -48,11 +46,16 @@ export async function createDetection(req: Request, res: Response, next: NextFun
     });
     const yoloData = yoloRes.data as any;
     
-    // Handle multiple predictions
     const predictions = yoloData.predictions || [];
-    const detections = [];
+    
+    // Create the scan first and get its ID
+    const scan = await detectionService.createScan(user_id);
+    const scanId = scan.id;
+    
+    const predictionsArray = [];
 
     for (const yoloPred of predictions) {
+      const detectionId = uuidv4(); // Generate unique ID for each prediction
       const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
       let category = (classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) ? CLASS_NAMES[classIdx] : '';
       
@@ -60,7 +63,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
       
       let detectionSource = 'YOLO';
       
-      let regression_result: number | undefined = undefined;
+      let regression_result: number | null = null;
       try {
         if (category && confidence !== null) {
           const regressionRes = await axios.post(env.regressionUrl, { label: category, confidence });
@@ -68,12 +71,12 @@ export async function createDetection(req: Request, res: Response, next: NextFun
           regression_result = regressionData.price;
         }
       } catch (err) {
-        regression_result = undefined;
+        regression_result = null;
       }
 
-      let description: string | undefined = undefined, 
+      let description: string | null = null, 
           suggestion: string[] = [], 
-          risk_lvl: number | undefined = undefined, 
+          risk_lvl: number | null = null, 
           validatedCategory: string = category;
 
       try {
@@ -148,7 +151,7 @@ Risk Level: <number 1-10>`;
         }
         
         const descriptionMatch = generatedText.match(/Description:\s*(.+?)(?=\n|$)/i);
-        description = descriptionMatch ? descriptionMatch[1].trim() : undefined;
+        description = descriptionMatch ? descriptionMatch[1].trim() : null;
         
         const suggestionMatch = generatedText.match(/Suggestions:\s*(.+?)(?=\n|$)/i);
         
@@ -173,7 +176,7 @@ Risk Level: <number 1-10>`;
         }
         
         const riskMatch = generatedText.match(/Risk Level:\s*(\d+)/i);
-        risk_lvl = riskMatch ? parseInt(riskMatch[1], 10) : undefined;
+        risk_lvl = riskMatch ? parseInt(riskMatch[1], 10) : null;
         
         if (description) {
           description = description.split(' ').slice(0, 40).join(' ');
@@ -190,29 +193,45 @@ Risk Level: <number 1-10>`;
       } catch (err) {
         const error = err as any;
         console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
-        description = undefined;
+        description = null;
         suggestion = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
-        risk_lvl = undefined;
+        risk_lvl = null;
         validatedCategory = category;
       }
 
-      const detection = await detectionService.createDetection({
-        id: uuidv4(),
-        user_id,
+      const prediction = {
         image_url: imageUrl,
         category: validatedCategory || 'Unknown',
         confidence,
         regression_result,
         description,
         suggestion: suggestion.join(' | '),
-        risk_lvl: risk_lvl || 1,
-        detection_source: detectionSource,
-      });
+        risk_lvl: risk_lvl || null,
+        detection_source: detectionSource
+      };
 
-      detections.push(detection);
+      predictionsArray.push(prediction);
+
+      await detectionService.createDetection({
+        id: detectionId,
+        user_id,
+        scan_id: scanId,
+        image_url: prediction.image_url,
+        category: prediction.category,
+        confidence: prediction.confidence,
+        regression_result: prediction.regression_result,
+        description: prediction.description,
+        suggestion: prediction.suggestion,
+        risk_lvl: prediction.risk_lvl,
+        detection_source: prediction.detection_source
+      });
     }
 
-    res.status(201).json(detections);
+    res.status(201).json({
+      id: scanId,
+      user_id,
+      prediction: predictionsArray
+    });
   } catch (err) {
     const error = err as any;
     console.error('Detection creation failed:', {
@@ -289,10 +308,17 @@ export async function deleteDetection(req: Request, res: Response, next: NextFun
   }
 }
 
-export async function updateDetection(req: Request, res: Response, next: NextFunction) {
+export async function updateDetection(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const fields = req.body;
+    
+    // Make sure the user_id from the authenticated request is included
+    // This ensures the updateDetection service can verify ownership
+    if (req.user && req.user.id) {
+      fields.user_id = req.user.id;
+    }
+    
     const updated = await detectionService.updateDetection(id, fields);
     res.json(updated);
   } catch (err) {
@@ -309,11 +335,22 @@ export async function updateDetectionImage(req: AuthRequest, res: Response, next
 
     const { id } = req.params;
     
-    // Upload image to GCS
+    // First get the detection to check it exists
+    const detection = await detectionService.getDetectionById(id);
+    
+    if (!detection) {
+      res.status(404).json({ message: 'Detection not found' });
+      return;
+    }
+    
+    // Upload the new image
     const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
     
-    // Update the detection with the new image URL
-    const updated = await detectionService.updateDetection(id, { image_url: imageUrl });
+    // Update the object image_url directly
+    const updated = await detectionService.updateDetection(id, { 
+      user_id: req.user?.id,
+      image_url: imageUrl
+    });
     
     res.json(updated);
   } catch (err) {

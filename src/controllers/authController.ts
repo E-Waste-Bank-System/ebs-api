@@ -3,47 +3,6 @@ import supabase from '../utils/supabase';
 import { isAdminUser, getUserById } from '../services/authService';
 import { signToken } from '../utils/token';
 
-/**
- * @swagger
- * /auth/login:
- *   post:
- *     summary: Login as admin (Supabase Auth email/password)
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
- *                 format: password
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                     email:
- *                       type: string
- *                     is_admin:
- *                       type: boolean
- *                 token:
- *                   type: string
- *       401:
- *         description: Invalid credentials
- */
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { email, password } = req.body;
@@ -71,40 +30,6 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
   }
 }
 
-/**
- * @swagger
- * /auth/token:
- *   post:
- *     summary: Get authentication token using Supabase user_id
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               user_id:
- *                 type: string
- *                 format: uuid
- *     responses:
- *       200:
- *         description: Token generated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 user:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                 token:
- *                   type: string
- *       401:
- *         description: Invalid user_id
- */
 export async function getToken(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { user_id } = req.body;

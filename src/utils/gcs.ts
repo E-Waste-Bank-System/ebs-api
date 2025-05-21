@@ -4,7 +4,7 @@ import logger from './logger';
 import path from 'path';
 import { getErrorMessage } from './error-utils';
 
-process.env.GOOGLE_APPLICATION_CREDENTIALS = '';
+process.env.GOOGLE_APPLICATION_CREDENTIALS = 'ebs-cloud-456404-472153b611d9.json';
 
 logger.info('Initializing Google Cloud Storage client with workload identity authentication');
 const storage = new Storage({

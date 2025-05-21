@@ -139,7 +139,7 @@ jobs:
             GCP_BUCKET=ebs-storage
             GCP_PROJECT_ID=ebs-cloud-456404
             GOOGLE_CLIENT_ID=981332637673-otgo810evdbis5hd6oa6pkiq4ha6dq3e.apps.googleusercontent.com
-            YOLO_URL=https://ebs-cv-981332637673.asia-southeast2.run.app/predict
+            YOLO_URL=https://ebs-cv-981332637673.asia-southeast2.run.app/object
             REGRESSION_URL=http://regression-service/api/predict
             CLIENT_ORIGIN=http://localhost:3000
             GEMINI_API_KEY=AIzaSyBI-WX9MQaiWyMwmwHoZS48gNu0e9Pu6P0

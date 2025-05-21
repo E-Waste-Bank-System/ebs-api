@@ -21,6 +21,18 @@ create table public.articles (
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
+-- 3. Scans Table (for grouping multiple object detections)
+create table public.scans (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'processing', 'completed', 'failed')),
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+create index idx_scans_user_id on public.scans(user_id);
+create index idx_scans_status on public.scans(status);
+create index idx_scans_created_at on public.scans(created_at);
+
 -- 4. Objects Table (raw AI results, editable by user)
 create table public.objects (
   id uuid primary key default gen_random_uuid(),
@@ -41,6 +53,19 @@ create index idx_objects_scan_id on public.objects(scan_id);
 create index idx_objects_user_id on public.objects(user_id);
 create index idx_objects_category on public.objects(category);
 create index idx_objects_created_at on public.objects(created_at);
+
+-- 5. Detections Table (for tracking validated object detections)
+create table public.detections (
+  id uuid primary key default gen_random_uuid(),
+  object_id uuid not null references public.objects(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  is_validated boolean not null default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+create index idx_detections_object_id on public.detections(object_id);
+create index idx_detections_user_id on public.detections(user_id);
+create index idx_detections_created_at on public.detections(created_at);
 
 -- 6. Ewaste Table (finalized/confirmed e-waste records)
 create table public.ewaste (

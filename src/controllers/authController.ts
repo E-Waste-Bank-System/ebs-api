@@ -39,24 +39,24 @@ export async function getToken(req: Request, res: Response, next: NextFunction):
     }
 
     // Get user data from Supabase Auth using admin API
-    const { data: user, error: userError } = await supabase.auth.admin.getUserById(user_id);
-    if (userError || !user) {
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(user_id);
+    if (userError || !userData || !userData.user || !userData.user.email) {
       res.status(401).json({ message: 'Invalid user' });
       return;
     }
 
     // Create token payload with the correct structure
     const tokenPayload = {
-      id: user.id,
+      id: userData.user.id,
       user: {
-        id: user.id,
-        email: user.email,
+        id: userData.user.id,
+        email: userData.user.email,
         is_admin: false
       }
     };
 
     const token = signToken(tokenPayload);
-    res.json({ user: { id: user.id, email: user.email }, token });
+    res.json({ user: { id: userData.user.id, email: userData.user.email }, token });
   } catch (err: unknown) {
     next(err);
   }

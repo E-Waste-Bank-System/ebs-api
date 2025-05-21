@@ -20,24 +20,88 @@ export interface DetectionWithPredictions {
 }
 
 export async function createScan(userId: string) {
-  const scanId = uuidv4();
-  const { data, error } = await supabase
-    .from('scans')
-    .insert({ id: scanId, user_id: userId })
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  try {
+    const scanId = uuidv4();
+    console.log('Attempting to create scan with ID:', scanId, 'for user:', userId);
+    
+    // First verify the user exists in auth.users
+    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+    
+    if (userError) {
+      console.error('Error verifying user:', {
+        error: userError,
+        message: userError.message,
+        code: userError.code,
+        userId
+      });
+      throw new Error(`User verification failed: ${userError.message}`);
+    }
+    
+    if (!userData) {
+      throw new Error(`User not found: ${userId}`);
+    }
+    
+    // Then create the scan
+    const { data, error } = await supabase
+      .from('scans')
+      .insert({
+        id: scanId,
+        user_id: userId,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase error during scan creation:', {
+        error,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        scanId,
+        userId
+      });
+      throw error;
+    }
+    
+    console.log('Scan created successfully:', data);
+    return data;
+  } catch (err) {
+    console.error('Unexpected error during scan creation:', {
+      error: err,
+      message: err instanceof Error ? err.message : 'Unknown error',
+      stack: err instanceof Error ? err.stack : undefined,
+      userId
+    });
+    throw err;
+  }
 }
 
 export async function createDetection(detection: Omit<Detection, 'created_at'>) {
-  const { data, error } = await supabase
-    .from('objects')
-    .insert(detection)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  try {
+    const { data, error } = await supabase
+      .from('objects')
+      .insert(detection)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Supabase error during detection creation:', {
+        error,
+        detection: { ...detection, image_url: '[REDACTED]' }
+      });
+      throw error;
+    }
+    return data;
+  } catch (err) {
+    console.error('Unexpected error during detection creation:', {
+      error: err,
+      detection: { ...detection, image_url: '[REDACTED]' }
+    });
+    throw err;
+  }
 }
 
 export async function getAllDetections() {

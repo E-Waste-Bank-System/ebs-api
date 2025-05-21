@@ -13,7 +13,7 @@ export async function getAll(limit: number, offset: number) {
     .from('articles')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false })
-    .limit(limit, { offset });
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return { data: data || [], total: count || 0 };
 }

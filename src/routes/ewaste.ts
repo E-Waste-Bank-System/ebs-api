@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllEwaste, createEwaste } from '../services/ewasteService';
+import { getAllEwaste, createEwaste } from '../controllers/ewasteController';
 import { isAdmin } from '../middlewares/role';
 
 const router = Router();

@@ -8,7 +8,7 @@ export function isAuthenticated(req: Request, res: Response, next: NextFunction)
 export function isAdmin(req: Request, res: Response, next: NextFunction) {
   requireAuth(req, res, () => {
     const authReq = req as AuthRequest;
-    if (authReq.user?.is_admin) {
+    if (authReq.user?.user?.is_admin) {
       next();
     } else {
       res.status(403).json({ message: 'Admin access required' });

@@ -9,7 +9,7 @@ const router = Router();
  * @swagger
  * tags:
  *   name: Auth
- *   description: Authentication endpoints
+ *   description: Authentication and token management
  */
 
 /**
@@ -25,24 +25,31 @@ const router = Router();
  *             id:
  *               type: string
  *               format: uuid
- *               description: User ID
+ *               description: User's unique identifier
  *             email:
  *               type: string
  *               format: email
- *               description: User email
+ *               description: User's email address
  *             is_admin:
  *               type: boolean
- *               description: Whether the user is an admin
+ *               description: Whether the user has administrator privileges
  *         token:
  *           type: string
- *           description: JWT authentication token
+ *           description: JWT authentication token to be used in Authorization header
+ *       example:
+ *         user:
+ *           id: "d0ac0ecb-b4d7-4d81-bcd7-c0bcec391527"
+ *           email: "user@example.com"
+ *           is_admin: false
+ *         token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
  */
 
 /**
  * @swagger
  * /auth/login:
  *   post:
- *     summary: Login as admin (Supabase Auth email/password)
+ *     summary: Authenticate as admin user
+ *     description: Validates email and password credentials for admin users against Supabase Auth
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -57,27 +64,33 @@ const router = Router();
  *               email:
  *                 type: string
  *                 format: email
- *                 description: Admin email
+ *                 description: Admin user email
  *               password:
  *                 type: string
  *                 format: password
- *                 description: Admin password
+ *                 description: Admin user password
+ *             example:
+ *               email: "admin@example.com"
+ *               password: "securepassword"
  *     responses:
  *       200:
- *         description: Login successful
+ *         description: Authentication successful
  *         content:
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Missing required fields
  *       401:
- *         description: Invalid credentials
+ *         description: Invalid credentials or user not authorized as admin
  */
 
 /**
  * @swagger
  * /auth/token:
  *   post:
- *     summary: Get authentication token using Supabase user_id
+ *     summary: Generate auth token from Supabase user ID
+ *     description: Creates a JWT token for a valid Supabase user ID (mobile app authentication flow)
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -92,6 +105,8 @@ const router = Router();
  *                 type: string
  *                 format: uuid
  *                 description: Supabase user ID
+ *             example:
+ *               user_id: "d0ac0ecb-b4d7-4d81-bcd7-c0bcec391527"
  *     responses:
  *       200:
  *         description: Token generated successfully
@@ -99,8 +114,10 @@ const router = Router();
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Missing user_id field
  *       401:
- *         description: Invalid user_id
+ *         description: Invalid user ID or user not found
  */
 
 const loginSchema = z.object({

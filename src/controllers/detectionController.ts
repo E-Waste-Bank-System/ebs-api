@@ -362,7 +362,8 @@ Risk Level: <number 1-10>`;
               description,
               suggestion,
               risk_lvl,
-              detection_source: detectionSource
+              detection_source: detectionSource,
+              image_url: imageUrl
             });
           } catch (err) {
             console.error('Error processing individual prediction:', {

@@ -156,47 +156,54 @@ export async function getAllDetectionsWithFilters(
 }
 
 export async function getDetectionsByUser(userId: string) {
-  const { data, error } = await supabase
-    .from('objects')
-    .select('*, scans(*)')
+  // First get all scans for the user
+  const { data: scans, error: scansError } = await supabase
+    .from('scans')
+    .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   
-  if (error) throw error;
+  if (scansError) throw scansError;
   
-  // If no data, return empty array
-  if (!data || data.length === 0) {
+  // If no scans found, return empty array
+  if (!scans || scans.length === 0) {
     return [];
   }
 
-  // Group detections by scan_id
-  const groupedDetections = data.reduce((acc: { [key: string]: DetectionWithPredictions }, detection: Detection) => {
-    const key = detection.scan_id || detection.id;
-    if (!acc[key]) {
-      acc[key] = {
-        id: detection.id,
-        user_id: detection.user_id,
-        scan_id: detection.scan_id || null,
-        prediction: [],
-        created_at: detection.created_at
-      };
-    }
-    
-    acc[key].prediction.push({
-      image_url: detection.image_url || '',
-      category: detection.category || '',
-      confidence: detection.confidence || 0,
-      regression_result: detection.regression_result ?? null,
-      description: detection.description ?? null,
-      suggestion: detection.suggestion ?? null,
-      risk_lvl: detection.risk_lvl ?? null,
-      detection_source: detection.detection_source ?? null
-    });
-    
-    return acc;
-  }, {});
+  // Get all objects (detections) for these scans
+  const { data: objects, error: objectsError } = await supabase
+    .from('objects')
+    .select('*')
+    .in('scan_id', scans.map(scan => scan.id))
+    .order('created_at', { ascending: false });
+  
+  if (objectsError) throw objectsError;
 
-  return Object.values(groupedDetections);
+  // Group objects by scan_id
+  const groupedDetections = scans.map(scan => {
+    const scanObjects = objects?.filter(obj => obj.scan_id === scan.id) || [];
+    
+    return {
+      id: scan.id, // This is the scan_id
+      user_id: scan.user_id,
+      scan_id: scan.id,
+      status: scan.status,
+      prediction: scanObjects.map(obj => ({
+        id: obj.id, // This is the object_id
+        image_url: obj.image_url || '',
+        category: obj.category || '',
+        confidence: obj.confidence || 0,
+        regression_result: obj.regression_result ?? null,
+        description: obj.description ?? null,
+        suggestion: obj.suggestion ?? null,
+        risk_lvl: obj.risk_lvl ?? null,
+        detection_source: obj.detection_source ?? null
+      })),
+      created_at: scan.created_at
+    };
+  });
+
+  return groupedDetections;
 }
 
 export async function getDetectionById(id: string) {

@@ -3,6 +3,7 @@ import env from '../config/env';
 import logger from './logger';
 import path from 'path';
 import { getErrorMessage } from './error-utils';
+import { v4 as uuidv4 } from 'uuid';
 
 process.env.GOOGLE_APPLICATION_CREDENTIALS = '';
 
@@ -16,6 +17,13 @@ const bucket = storage.bucket(env.gcsBucket);
 const MAX_RETRIES = 3;
 
 const DEFAULT_CACHE_DURATION = 86400;
+
+function createSafeFilename(originalFilename: string): string {
+  const extension = originalFilename.includes('.') 
+    ? originalFilename.split('.').pop() 
+    : '';
+  return `detection_${uuidv4()}${extension ? '.' + extension.replace(/[^\w.-]/g, '') : ''}`;
+}
 
 export async function uploadImage(
   buffer: Buffer,
@@ -36,17 +44,16 @@ export async function uploadImage(
       throw new Error(`Invalid filename provided: ${filename}`);
     }
     
-    const baseName = path.basename(filename);
-    const sanitizedFilename = baseName.replace(/[^\w\s.-]/g, '_');
+    const safeFilename = createSafeFilename(filename);
     
-    logger.info(`Uploading file "${sanitizedFilename}" to bucket "${env.gcsBucket}"`);
+    logger.info(`Uploading file "${safeFilename}" to bucket "${env.gcsBucket}"`);
     logger.debug(`File content type: ${contentType}, size: ${buffer.length} bytes`);
     
     if (!env.gcsBucket) {
       throw new Error('GCS bucket name is not configured');
     }
 
-    const file = bucket.file(sanitizedFilename);
+    const file = bucket.file(safeFilename);
     
     const isPublic = options.isPublic ?? true; 
     const cacheMaxAge = options.cacheMaxAge ?? DEFAULT_CACHE_DURATION;
@@ -71,7 +78,7 @@ export async function uploadImage(
           gzip: true
         });
         
-        logger.info(`File saved successfully to GCS: ${sanitizedFilename} (attempt ${retries + 1})`);
+        logger.info(`File saved successfully to GCS: ${safeFilename} (attempt ${retries + 1})`);
         uploadError = null;
         break;
       } catch (saveError: unknown) {
@@ -97,8 +104,8 @@ export async function uploadImage(
     
     if (isPublic) {
       await file.makePublic();
-      fileUrl = `https://storage.googleapis.com/${env.gcsBucket}/${sanitizedFilename}`;
-      logger.info(`File made public successfully: ${sanitizedFilename}`);
+      fileUrl = `https://storage.googleapis.com/${env.gcsBucket}/${safeFilename}`;
+      logger.info(`File made public successfully: ${safeFilename}`);
     } 
     else {
       const signedUrlExpiry = 7 * 24 * 60 * 60 * 1000; 

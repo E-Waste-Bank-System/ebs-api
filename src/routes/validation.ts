@@ -18,7 +18,7 @@ const router = Router();
  *       type: object
  *       required:
  *         - id
- *         - detection_id
+ *         - object_id
  *         - user_id
  *         - is_accurate
  *       properties:
@@ -26,7 +26,7 @@ const router = Router();
  *           type: string
  *           format: uuid
  *           description: Unique identifier for the validation feedback
- *         detection_id:
+ *         object_id:
  *           type: string
  *           format: uuid
  *           description: ID of the detection being validated
@@ -47,7 +47,7 @@ const router = Router();
  *           description: Timestamp when the validation was submitted
  *       example:
  *         id: "550e8400-e29b-41d4-a716-446655440000"
- *         detection_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+ *         object_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
  *         user_id: "d0ac0ecb-b4d7-4d81-bcd7-c0bcec391527"
  *         is_accurate: true
  *         feedback: "Deteksi sangat akurat, keyboard terdeteksi dengan benar."
@@ -77,10 +77,10 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - detection_id
+ *               - object_id
  *               - is_accurate
  *             properties:
- *               detection_id:
+ *               object_id:
  *                 type: string
  *                 format: uuid
  *                 description: ID of the detection being validated
@@ -91,7 +91,7 @@ const router = Router();
  *                 type: string
  *                 description: Additional feedback about the detection (optional); if is_accurate=false, this should contain the correct category name
  *             example:
- *               detection_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+ *               object_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
  *               is_accurate: true
  *               feedback: "Kategori dan deskripsi sesuai dengan barang elektronik saya."
  *     responses:

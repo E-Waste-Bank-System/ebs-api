@@ -11,12 +11,12 @@ export async function createRetrainingEntry(req: Request, res: Response, next: N
       confidence_score,
       model_version,
       user_id,
-      detection_id
+      object_id
     } = req.body;
 
     // Validate required fields
     if (!image_url || !original_category || !bbox_coordinates || 
-        !model_version || !user_id || !detection_id) {
+        !model_version || !user_id || !object_id) {
       res.status(400).json({ message: 'Missing required fields' });
       return;
     }
@@ -29,7 +29,7 @@ export async function createRetrainingEntry(req: Request, res: Response, next: N
       corrected_category: null,
       model_version,
       user_id,
-      detection_id
+      object_id
     });
 
     res.status(201).json(data);

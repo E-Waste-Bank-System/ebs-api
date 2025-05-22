@@ -287,23 +287,19 @@ export async function createDetection(req: Request, res: Response, next: NextFun
             const useLowConfidencePrompt = !category || confidence < 0.2;
             
             let regression_result: number | null = null;
-            try {
-              if (category && confidence !== null) {
-                console.log('Sending request to regression service...');
-                const regressionRes = await axios.post(env.regressionUrl, { label: category, confidence });
-                const regressionData = regressionRes.data as any;
-                regression_result = regressionData.price;
-                console.log('Regression result received:', regression_result);
-              }
-            } catch (err) {
-              console.error('Regression service error:', err);
-              regression_result = null;
-            }
+            let description: string | null = null;
+            let suggestionArray: string[] = [];
+            let risk_lvl: number | null = null;
+            let validatedCategory = category;
 
-            let description: string | null = null, 
-                suggestion: string[] = [], 
-                risk_lvl: number | null = null, 
-                validatedCategory: string = category;
+            // Extract bounding box coordinates from YOLO prediction
+            const bbox = yoloPred?.bbox || [0, 0, 0, 0];
+            const bbox_coordinates = {
+              x: bbox[0],
+              y: bbox[1],
+              width: bbox[2] - bbox[0],
+              height: bbox[3] - bbox[1]
+            };
 
             try {
               const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
@@ -379,7 +375,7 @@ Risk Level: <number 1-10>`;
               
               const suggestionsMatch = generatedText.match(/Suggestions:\s*(.+?)(?=\n|$)/i);
               if (suggestionsMatch) {
-                suggestion = suggestionsMatch[1].split(',').map((s: string) => s.trim());
+                suggestionArray = suggestionsMatch[1].split(',').map((s: string) => s.trim());
               }
               
               const riskMatch = generatedText.match(/Risk Level:\s*(\d+)/i);
@@ -393,7 +389,7 @@ Risk Level: <number 1-10>`;
               const error = err as any;
               console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
               description = null;
-              suggestion = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
+              suggestionArray = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
               risk_lvl = null;
               validatedCategory = category;
             }
@@ -409,30 +405,27 @@ Risk Level: <number 1-10>`;
               confidence,
               regression_result,
               description,
-              suggestion: suggestion.join(' | '),
-              risk_lvl: risk_lvl
+              suggestion: suggestionArray.join(' | ') || '',
+              risk_lvl
             });
             console.log('Detection record created successfully:', detectionId);
             
             // Create retraining data entry from the detection
             try {
-              // Extract bounding box coordinates from YOLO prediction
-              const bbox = yoloPred?.bbox || { x: 0, y: 0, width: 0, height: 0 };
-              
               await retrainingService.createRetrainingData({
                 image_url: imageUrl,
                 original_category: yoloClassName,
                 bbox_coordinates: {
-                  x: bbox.x || 0,
-                  y: bbox.y || 0,
-                  width: bbox.width || 0,
-                  height: bbox.height || 0
+                  x: bbox[0],
+                  y: bbox[1],
+                  width: bbox[2] - bbox[0],
+                  height: bbox[3] - bbox[1]
                 },
                 confidence_score: confidence,
                 corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
-                model_version: 'YOLOv8-1.0',
+                model_version: 'YOLOv11',
                 user_id,
-                detection_id: detectionId
+                object_id: detectionId
               });
               console.log('Retraining data record created for detection:', detectionId);
             } catch (retrainErr) {
@@ -446,7 +439,7 @@ Risk Level: <number 1-10>`;
               confidence,
               regression_result,
               description,
-              suggestion,
+              suggestion: suggestionArray.join(' | '),
               risk_lvl,
               detection_source: detectionSource,
               image_url: imageUrl

@@ -50,7 +50,7 @@ const router = Router();
  *         - is_verified
  *         - model_version
  *         - user_id
- *         - detection_id
+ *         - object_id
  *       properties:
  *         id:
  *           type: string
@@ -82,10 +82,10 @@ const router = Router();
  *           type: string
  *           format: uuid
  *           description: ID of the user associated with this data
- *         detection_id:
+ *         object_id:
  *           type: string
  *           format: uuid
- *           description: ID of the related detection
+ *           description: ID of the related detection (required for linking validations and retraining data)
  *         created_at:
  *           type: string
  *           format: date-time
@@ -118,7 +118,7 @@ const router = Router();
  *               - confidence_score
  *               - model_version
  *               - user_id
- *               - detection_id
+ *               - object_id
  *             properties:
  *               image_url:
  *                 type: string
@@ -139,10 +139,10 @@ const router = Router();
  *                 type: string
  *                 format: uuid
  *                 description: ID of the user associated with this data
- *               detection_id:
+ *               object_id:
  *                 type: string
  *                 format: uuid
- *                 description: ID of the related detection
+ *                 description: ID of the related detection (required for linking validations and retraining data)
  *     responses:
  *       201:
  *         description: Retraining data entry created successfully

@@ -8,21 +8,21 @@ import * as detectionService from '../services/detectionService';
  */
 export async function createValidation(req: any, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { detection_id, is_accurate, feedback } = req.body;
+    const { object_id, is_accurate, feedback } = req.body;
     
-    if (!detection_id) {
-      res.status(400).json({ message: 'detection_id is required' });
+    if (!object_id) {
+      res.status(400).json({ message: 'object_id is required' });
       return;
     }
     
-    // Get the detection to use for creating or updating retraining data
-    const detection = await detectionService.getDetectionById(detection_id);
+    // Get the detection (object) to use for creating or updating retraining data
+    const detection = await detectionService.getDetectionById(object_id);
     if (!detection) {
-      res.status(404).json({ message: 'Detection not found' });
+      res.status(404).json({ message: 'Object not found' });
       return;
     }
     
-    const retrainingData = await retrainingService.getRetrainingDataByDetectionId(detection_id);
+    const retrainingData = await retrainingService.getRetrainingDataByObjectId(object_id);
     
     let result;
     
@@ -55,14 +55,14 @@ export async function createValidation(req: any, res: Response, next: NextFuncti
         corrected_category: !is_accurate && feedback ? feedback : detection.category,
         model_version: detection.detection_source || 'unknown',
         user_id: req.user.id,
-        detection_id: detection_id
+        object_id: object_id
       });
     }
     
     // Transform to validation format for backward compatibility
     const validationResponse = {
       id: uuidv4(),
-      detection_id,
+      object_id,
       user_id: req.user.id,
       is_accurate,
       feedback,
@@ -86,7 +86,7 @@ export async function getAllValidations(req: Request, res: Response, next: NextF
     // Transform to validation format for backward compatibility
     const validations = data.map(item => ({
       id: item.id,
-      detection_id: item.detection_id,
+      object_id: item.object_id,
       user_id: item.user_id,
       is_accurate: item.corrected_category === item.original_category,
       feedback: item.corrected_category !== item.original_category ? item.corrected_category : null,

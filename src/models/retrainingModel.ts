@@ -13,7 +13,7 @@ export interface RetrainingData {
   is_verified: boolean;
   model_version: string;
   user_id: string;
-  detection_id: string;
+  object_id: string;
   created_at: string;
   updated_at?: string;
 } 

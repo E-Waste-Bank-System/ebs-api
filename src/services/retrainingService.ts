@@ -128,21 +128,21 @@ export async function exportVerifiedData() {
 }
 
 /**
- * Get retraining data entry by detection ID
+ * Get retraining data entry by object ID
  */
-export async function getRetrainingDataByDetectionId(detection_id: string): Promise<RetrainingData | null> {
+export async function getRetrainingDataByObjectId(object_id: string): Promise<RetrainingData | null> {
   try {
     const { data, error } = await supabase
       .from('retraining_data')
       .select('*')
-      .eq('detection_id', detection_id)
+      .eq('object_id', object_id)
       .order('created_at', { ascending: false })
       .limit(1);
     
     if (error) throw error;
     return data && data.length > 0 ? data[0] : null;
   } catch (err) {
-    console.error('Error getting retraining data by detection ID:', err);
+    console.error('Error getting retraining data by object ID:', err);
     throw err;
   }
 } 

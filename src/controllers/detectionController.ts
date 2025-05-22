@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import * as detectionService from '../services/detectionService';
+import * as retrainingService from '../services/retrainingService';
 import { getAllDetectionsWithFilters } from '../services/detectionService';
 import { uploadImage } from '../utils/gcs';
 import env from '../config/env';
@@ -10,36 +11,95 @@ import FormData from 'form-data';
 
 // Database categories - consolidated categories for database storage
 const CLASS_NAMES = [
-  // Computing Devices
-  'Keyboard', 'Mouse', 'Computer', 'Laptop', 'Storage',
-  // Display Devices
-  'Monitor', 'Television',
-  // Mobile Devices
-  'Phone', 'Console', 'Camera',
-  // Audio Devices
-  'Speaker', 'Headphone',
-  // Power Devices
-  'Adapter', 'Battery',
-  // Kitchen Devices
-  'Microwave', 'Oven', 'Toaster',
-  // Cooling Devices
-  'Refrigerator',
-  // Home Devices
-  'Iron', 'Washer', 'Vacuum',
-  // Air Control
-  'Fan', 'AirConditioner',
-  // Office Equipment
-  'Printer', 'Calculator',
-  // Networking
-  'Router',
-  // Lighting
-  'Lamp',
-  // Health Devices
-  'Monitor', 'Meter',
-  // Vehicle
-  'Vehicle',
-  // Energy
-  'Panel'
+  "AC",
+  "Adaptor /Kilo",
+  "Aki Motor",
+  "Alat Tensi",
+  "Alat Tes Vol",
+  "Ant Miner Case",
+  "Ant Miner Hashboard",
+  "Antena",
+  "Bantal Pemanas",
+  "Baterai Laptop",
+  "Batok Charger",
+  "Blender",
+  "Box Kabel",
+  "Box Speaker Kecil",
+  "Camera",
+  "Catokan",
+  "CCTV",
+  "CD",
+  "Charger Laptop",
+  "Cooler",
+  "DVD Player",
+  "DVD ROM",
+  "Flashdisk",
+  "Game Boy",
+  "Hair Dryer",
+  "Handphone",
+  "Hardisk",
+  "Homic Wireless",
+  "Jam Digital",
+  "Jam Dinding",
+  "Jam Tangan",
+  "Kabel /Kilo",
+  "Kabel Sambungan",
+  "Keyboard",
+  "Kipas",
+  "Komponen CPU",
+  "Komponen Kulkas",
+  "Kompor Listrik",
+  "Lampu",
+  "Laptop",
+  "Magicom",
+  "Mesin Cuci",
+  "Mesin Facial",
+  "Mesin Fax",
+  "Mesin Jahit",
+  "Mesin Kasir",
+  "Mesin Pijat",
+  "Microfon",
+  "Microwave",
+  "Mixer",
+  "Modem",
+  "Monitor",
+  "Motherboard",
+  "Mouse",
+  "Multi Tester",
+  "Neon Box",
+  "Notebook Cooler",
+  "Oven",
+  "Panel Surya",
+  "Pompa Air",
+  "Power Bank",
+  "Power Supply",
+  "Printer",
+  "PS2",
+  "Radio",
+  "Raket Nyamuk",
+  "Remot",
+  "Router",
+  "Saklar Lampu",
+  "Senter",
+  "Seterika",
+  "Solder",
+  "Sound Blaster",
+  "Speaker",
+  "Stabilizer",
+  "Stik Ps",
+  "Stop Kontak",
+  "Tabung Debu",
+  "Teko Listrik",
+  "Telefon",
+  "Timbangan Badan",
+  "Tinta",
+  "TV",
+  "Ultrasonic",
+  "UPS",
+  "Vacum Cleaner",
+  "VGA",
+  "Walkie Talkie",
+  "Wireless Charger"
 ];
 
 // Map YOLO class names to our consolidated database categories
@@ -48,12 +108,12 @@ const YOLO_TO_CATEGORY_MAP: { [key: string]: string } = {
   'Computer-Keyboard': 'Keyboard',
   'Electronic-Keyboard': 'Keyboard',
   'Computer-Mouse': 'Mouse',
-  'Desktop-PC': 'Computer',
-  'Server': 'Computer',
-  'PCB': 'Computer',
-  'HDD': 'Storage',
-  'SSD': 'Storage',
-  'USB-Flash-Drive': 'Storage',
+  'Desktop-PC': 'Komponen CPU',
+  'Server': 'Komponen CPU',
+  'PCB': 'Komponen CPU',
+  'HDD': 'Hardisk',
+  'SSD': 'Hardisk',
+  'USB-Flash-Drive': 'Flashdisk',
   'Laptop': 'Laptop',
 
   // Display Devices
@@ -62,93 +122,93 @@ const YOLO_TO_CATEGORY_MAP: { [key: string]: string } = {
   'Digital-Oscilloscope': 'Monitor',
   'Patient-Monitoring-System': 'Monitor',
   'Projector': 'Monitor',
-  'Flat-Panel-TV': 'Television',
-  'CRT-TV': 'Television',
-  'TV-Remote-Control': 'Television',
+  'Flat-Panel-TV': 'TV',
+  'CRT-TV': 'TV',
+  'TV-Remote-Control': 'Remot',
   
   // Mobile Devices
-  'Smartphone': 'Phone',
-  'Bar-Phone': 'Phone',
-  'Smart-Watch': 'Phone',
-  'Tablet': 'Phone',
+  'Smartphone': 'Handphone',
+  'Bar-Phone': 'Telefon',
+  'Smart-Watch': 'Jam Tangan',
+  'Tablet': 'Handphone',
   'Camera': 'Camera',
-  'PlayStation-5': 'Console',
-  'Xbox-Series-X': 'Console',
+  'PlayStation-5': 'PS2',
+  'Xbox-Series-X': 'PS2',
   
   // Audio Devices
   'Speaker': 'Speaker',
-  'Headphone': 'Headphone',
+  'Headphone': 'Speaker',
   'Music-Player': 'Speaker',
   'Electric-Guitar': 'Speaker',
   
   // Power Devices
-  'Power-Adapter': 'Adapter',
-  'Battery': 'Battery',
+  'Power-Adapter': 'Adaptor /Kilo',
+  'Battery': 'Baterai Laptop',
   
   // Kitchen Devices
   'Microwave': 'Microwave',
   'Coffee-Machine': 'Oven',
   'Oven': 'Oven',
-  'Stove': 'Oven',
-  'Toaster': 'Toaster',
+  'Stove': 'Kompor Listrik',
+  'Toaster': 'Oven',
   
   // Cooling Devices
-  'Refrigerator': 'Refrigerator',
-  'Freezer': 'Refrigerator',
-  'Cooled-Dispenser': 'Refrigerator',
-  'Non-Cooled-Dispenser': 'Refrigerator',
-  'Cooling-Display': 'Refrigerator',
+  'Refrigerator': 'Komponen Kulkas',
+  'Freezer': 'Komponen Kulkas',
+  'Cooled-Dispenser': 'Komponen Kulkas',
+  'Non-Cooled-Dispenser': 'Komponen Kulkas',
+  'Cooling-Display': 'Komponen Kulkas',
 
   // Home Devices
-  'Clothes-Iron': 'Iron',
-  'Boiler': 'Heater',
+  'Clothes-Iron': 'Seterika',
+  'Boiler': 'Kompor Listrik',
   'Hair-Dryer': 'Hair Dryer',
-  'Rotary-Mower': 'Rotary Mower',
-  'Soldering-Iron': 'Iron',
-  'Vacuum-Cleaner': 'Vacuum',
-  'Washing-Machine': 'Washer',
-  'Dishwasher': 'Washer',
-  'Tumble-Dryer': 'Washer',
+  'Rotary-Mower': 'Kipas',
+  'Soldering-Iron': 'Solder',
+  'Vacuum-Cleaner': 'Vacum Cleaner',
+  'Washing-Machine': 'Mesin Cuci',
+  'Dishwasher': 'Mesin Cuci',
+  'Tumble-Dryer': 'Mesin Cuci',
 
   // Air Control
-  'Ceiling-Fan': 'Fan',
-  'Floor-Fan': 'Fan',
-  'Exhaust-Fan': 'Fan',
-  'Range-Hood': 'Fan',
-  'Air-Conditioner': 'AirConditioner',
-  'Dehumidifier': 'AirConditioner',
+  'Ceiling-Fan': 'Kipas',
+  'Floor-Fan': 'Kipas',
+  'Exhaust-Fan': 'Kipas',
+  'Range-Hood': 'Kipas',
+  'Air-Conditioner': 'AC',
+  'Dehumidifier': 'AC',
 
   // Office Equipment
   'Printer': 'Printer',
-  'Calculator': 'Calculator',
+  'Calculator': 'Alat Tes Vol',
 
   // Networking
   'Router': 'Router',
   'Network-Switch': 'Router',
 
   // Lighting
-  'LED-Bulb': 'Lamp',
-  'Table-Lamp': 'Lamp',
-  'Straight-Tube-Fluorescent-Lamp': 'Lamp',
-  'Compact-Fluorescent-Lamps': 'Lamp',
-  'Christmas-Lights': 'Lamp',
-  'Neon-Sign': 'Lamp',
-  'Street-Lamp': 'Lamp',
+  'LED-Bulb': 'Lampu',
+  'Table-Lamp': 'Lampu',
+  'Straight-Tube-Fluorescent-Lamp': 'Lampu',
+  'Compact-Fluorescent-Lamps': 'Lampu',
+  'Christmas-Lights': 'Lampu',
+  'Neon-Sign': 'Neon Box',
+  'Street-Lamp': 'Lampu',
 
   // Health Devices
-  'Blood-Pressure-Monitor': 'Monitor',
+  'Blood-Pressure-Monitor': 'Alat Tensi',
   'Electrocardiograph-Machine': 'Monitor',
-  'Glucose-Meter': 'Meter',
-  'Pulse-Oximeter': 'Meter',
+  'Glucose-Meter': 'Alat Tes Vol',
+  'Pulse-Oximeter': 'Alat Tes Vol',
 
   // Vehicle
-  'Drone': 'Vehicle',
-  'Electric-Bicycle': 'Vehicle',
+  'Drone': 'Kipas',
+  'Electric-Bicycle': 'Aki Motor',
 
   // Energy
-  'Photovoltaic-Panel': 'Panel',
-  'Telephone-Set': 'Phone',
-  'Flashlight': 'Lamp',
+  'Photovoltaic-Panel': 'Panel Surya',
+  'Telephone-Set': 'Telefon',
+  'Flashlight': 'Senter',
   'Smoke-Detector': 'Monitor'
 };
 
@@ -224,7 +284,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
             let detectionSource = 'YOLO';
             
             // If confidence is low or category mapping failed, use Gemini for validation
-            const useLowConfidencePrompt = !category || confidence < 0.65;
+            const useLowConfidencePrompt = !category || confidence < 0.2;
             
             let regression_result: number | null = null;
             try {
@@ -339,7 +399,7 @@ Risk Level: <number 1-10>`;
             }
 
             console.log('Creating detection record...');
-            await detectionService.createDetection({
+            const detection = await detectionService.createDetection({
               id: detectionId,
               user_id,
               scan_id: scanId,
@@ -353,6 +413,32 @@ Risk Level: <number 1-10>`;
               risk_lvl: risk_lvl
             });
             console.log('Detection record created successfully:', detectionId);
+            
+            // Create retraining data entry from the detection
+            try {
+              // Extract bounding box coordinates from YOLO prediction
+              const bbox = yoloPred?.bbox || { x: 0, y: 0, width: 0, height: 0 };
+              
+              await retrainingService.createRetrainingData({
+                image_url: imageUrl,
+                original_category: yoloClassName,
+                bbox_coordinates: {
+                  x: bbox.x || 0,
+                  y: bbox.y || 0,
+                  width: bbox.width || 0,
+                  height: bbox.height || 0
+                },
+                confidence_score: confidence,
+                corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
+                model_version: 'YOLOv8-1.0',
+                user_id,
+                detection_id: detectionId
+              });
+              console.log('Retraining data record created for detection:', detectionId);
+            } catch (retrainErr) {
+              console.error('Failed to create retraining data:', retrainErr);
+              // Continue with the detection process even if retraining data creation fails
+            }
             
             predictionsArray.push({
               id: detectionId,
@@ -420,9 +506,20 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
       category, 
       detection_source
     );
+    
+    // Transform suggestions from pipe-separated strings to arrays
+    const transformedData = data.map(item => {
+      if (item.suggestion) {
+        return {
+          ...item,
+          suggestion: item.suggestion.split(' | ')
+        };
+      }
+      return item;
+    });
   
     res.json({
-      data,
+      data: transformedData,
       total,
       current_page: page,
       last_page,
@@ -436,7 +533,29 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
 export async function getDetectionsByUser(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await detectionService.getDetectionsByUser(req.params.userId);
-    res.json(data);
+    
+    // Transform prediction suggestions from pipe-separated strings to arrays
+    const transformedData = data.map(scan => {
+      if (scan.prediction && Array.isArray(scan.prediction)) {
+        const transformedPredictions = scan.prediction.map(pred => {
+          if (pred.suggestion && typeof pred.suggestion === 'string') {
+            return {
+              ...pred,
+              suggestion: pred.suggestion.split(' | ')
+            };
+          }
+          return pred;
+        });
+        
+        return {
+          ...scan,
+          prediction: transformedPredictions
+        };
+      }
+      return scan;
+    });
+    
+    res.json(transformedData);
   } catch (err) {
     next(err);
   }
@@ -445,7 +564,17 @@ export async function getDetectionsByUser(req: Request, res: Response, next: Nex
 export async function getDetectionById(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await detectionService.getDetectionById(req.params.id);
-    res.json(data);
+    
+    // Transform suggestion from pipe-separated string to array
+    if (data && data.suggestion) {
+      const responseData = {
+        ...data,
+        suggestion: data.suggestion.split(' | ')
+      };
+      res.json(responseData);
+    } else {
+      res.json(data);
+    }
   } catch (err) {
     next(err);
   }

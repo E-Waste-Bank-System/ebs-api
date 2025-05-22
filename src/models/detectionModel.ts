@@ -47,7 +47,7 @@
  *         suggestion:
  *           type: string
  *           nullable: true
- *           description: Suggestions for handling the e-waste (up to 3 points, joined by ' | ')
+ *           description: Suggestions for handling the e-waste (up to 3 points, stored as pipe-separated string)
  *         risk_lvl:
  *           type: integer
  *           minimum: 1
@@ -85,7 +85,7 @@ export interface Detection {
   confidence: number;
   regression_result: number | null;
   description: string | null;
-  suggestion: string | null;
+  suggestion: string | null; // Stored as pipe-separated string in DB
   risk_lvl: number | null;
   scans?: Scan;    // Related scan data
   created_at: string;

@@ -8,7 +8,7 @@ const router = Router();
  * @swagger
  * tags:
  *   name: Validations
- *   description: User feedback on e-waste detection accuracy
+ *   description: User feedback on e-waste detection accuracy (integrated with model retraining)
  */
 /**
  * @swagger
@@ -58,7 +58,16 @@ const router = Router();
  * /validations:
  *   post:
  *     summary: Submit validation feedback
- *     description: Allow users to provide feedback on detection accuracy to improve the AI model
+ *     description: |
+ *       Allow users to provide feedback on detection accuracy to improve the AI model.
+ *       This automatically updates the retraining dataset to help improve model accuracy over time.
+ *       If the detection is marked inaccurate, the feedback will be used as the corrected category.
+ *       
+ *       Integration details:
+ *       - For existing retraining data: Updates is_verified=true and sets corrected_category if feedback provided
+ *       - For missing retraining data: Creates a new retraining entry with the validation information
+ *       - Validations marked accurate: Sets the original category as the corrected category
+ *       - Validations marked inaccurate: Uses the feedback text as the corrected category
  *     tags: [Validations]
  *     security: [ { bearerAuth: [] } ]
  *     requestBody:
@@ -80,14 +89,14 @@ const router = Router();
  *                 description: Whether the detection was accurate
  *               feedback:
  *                 type: string
- *                 description: Additional feedback about the detection (optional)
+ *                 description: Additional feedback about the detection (optional); if is_accurate=false, this should contain the correct category name
  *             example:
  *               detection_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
  *               is_accurate: true
  *               feedback: "Kategori dan deskripsi sesuai dengan barang elektronik saya."
  *     responses:
  *       201:
- *         description: Validation feedback submitted successfully
+ *         description: Validation feedback submitted successfully and retraining data updated
  *         content:
  *           application/json:
  *             schema:

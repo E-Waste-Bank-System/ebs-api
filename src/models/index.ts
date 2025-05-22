@@ -2,5 +2,6 @@
 export * from './detectionModel';
 export * from './validationModel';
 export * from './userModel';
+export * from './retrainingModel';
 
-// now exports Admin 
+// now exports Admin, RetrainingData

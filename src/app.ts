@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import detectionRoutes from './routes/detection';
 import validationRoutes from './routes/validation';
+import retrainingRoutes from './routes/retraining';
 import { getStatistics } from './controllers/statisticsController';
 import userRoutes from './routes/user';
 import upload from './middlewares/upload';
@@ -211,6 +212,7 @@ function generateSwaggerSpec() {
         { name: 'Detections', description: 'E-waste detection and analysis' },
         { name: 'Articles', description: 'Article management for educational content' },
         { name: 'Validations', description: 'User feedback on detection accuracy' },
+        { name: 'Retraining', description: 'Model retraining data management' },
         { name: 'Ewaste', description: 'E-waste inventory management' },
         { name: 'Admins', description: 'Administrator user management' },
         { name: 'Statistics', description: 'System-wide statistics and analytics' },
@@ -233,6 +235,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/detections', detectionRoutes);
 app.use('/api/validations', validationRoutes);
+app.use('/api/retraining', retrainingRoutes);
 app.get('/api/stats', getStatistics);
 app.use('/api/admins', userRoutes);
 app.post('/api/upload', upload.single('image'), uploadFile);

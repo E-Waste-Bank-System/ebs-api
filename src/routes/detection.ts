@@ -106,7 +106,7 @@ const router = Router();
  *         confidence: 0.95
  *         regression_result: 75000
  *         description: "Keyboard komputer hitam dengan tombol mekanik, kondisi masih baik namun kotor."
- *         suggestion: "Bersihkan dengan alkohol isopropil | Cek fungsi tombol sebelum daur ulang | Pisahkan komponen plastik dan logam"
+ *         suggestion: ["Bersihkan dengan alkohol isopropil", "Cek fungsi tombol sebelum daur ulang", "Pisahkan komponen plastik dan logam"]
  *         risk_lvl: 3
  *         created_at: "2023-06-01T12:00:00Z"
  *         updated_at: "2023-06-01T12:30:00Z"
@@ -160,7 +160,9 @@ const router = Router();
  *                 nullable: true
  *                 description: Detailed description of the detection
  *               suggestion:
- *                 type: string
+ *                 type: array
+ *                 items:
+ *                   type: string
  *                 nullable: true
  *                 description: Suggestions for handling the e-waste
  *               risk_lvl:
@@ -190,7 +192,7 @@ const router = Router();
  *             confidence: 0.95,
  *             regression_result: 75000,
  *             description: "Keyboard komputer hitam dengan tombol mekanik, kondisi masih baik namun kotor.",
- *             suggestion: "Bersihkan dengan alkohol isopropil | Cek fungsi tombol sebelum daur ulang | Pisahkan komponen plastik dan logam",
+ *             suggestion: ["Bersihkan dengan alkohol isopropil", "Cek fungsi tombol sebelum daur ulang", "Pisahkan komponen plastik dan logam"],
  *             risk_lvl: 3,
  *             detection_source: "YOLO"
  *           }

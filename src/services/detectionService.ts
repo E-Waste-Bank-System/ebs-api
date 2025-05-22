@@ -161,10 +161,16 @@ export async function getDetectionsByUser(userId: string) {
     .select('*, scans(*)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
+  
   if (error) throw error;
+  
+  // If no data, return empty array
+  if (!data || data.length === 0) {
+    return [];
+  }
 
   // Group detections by scan_id
-  const groupedDetections = (data || []).reduce((acc: { [key: string]: DetectionWithPredictions }, detection: Detection) => {
+  const groupedDetections = data.reduce((acc: { [key: string]: DetectionWithPredictions }, detection: Detection) => {
     const key = detection.scan_id || detection.id;
     if (!acc[key]) {
       acc[key] = {

@@ -10,6 +10,8 @@ export interface RetrainingData {
   };
   confidence_score: number;
   corrected_category: string | null;
+  original_price: number | null;
+  corrected_price: number | null;
   is_verified: boolean;
   model_version: string;
   user_id: string;

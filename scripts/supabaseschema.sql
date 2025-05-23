@@ -21,7 +21,7 @@ create table public.articles (
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
--- 3. Scans Table (for grouping multiple object detections)
+--- 3. Scans Table (for grouping multiple object detections)
 create table public.scans (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -46,6 +46,7 @@ create table public.objects (
   description text,               -- new: max 40 words (enforced in backend)
   suggestion text,                -- new: up to 3 points, joined by ' | ' (or use text[] for array)
   risk_lvl integer check (risk_lvl >= 1 and risk_lvl <= 10),  -- new: 1-10
+  bbox_coordinates jsonb,         -- new: stores bounding box coordinates
   is_validated boolean not null default false,  -- new: tracks validation status
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now())
@@ -81,10 +82,11 @@ create table public.retraining_data (
   object_id uuid not null references public.objects(id) on delete cascade,  -- changed from detection_id to object_id
   image_url text not null,
   original_category text not null,
-  bbox_coordinates jsonb not null,  -- required field for retraining
+  bbox_coordinates jsonb,
   confidence_score float not null check (confidence_score >= 0 and confidence_score <= 1),
   corrected_category text,
-  estimated_corrected_price float check (estimated_corrected_price >= 0),  -- new: stores corrected price estimate
+  original_price float,  -- new: price prediction for original category
+  corrected_price float, -- new: price prediction for corrected category
   is_verified boolean not null default false,
   model_version text,
   created_at timestamp with time zone default timezone('utc'::text, now()),
@@ -96,15 +98,3 @@ create index idx_retraining_data_original_category on public.retraining_data(ori
 create index idx_retraining_data_corrected_category on public.retraining_data(corrected_category);
 create index idx_retraining_data_is_verified on public.retraining_data(is_verified);
 create index idx_retraining_data_created_at on public.retraining_data(created_at);
-
--- 7. (Optional) Top 5 E-Waste Categories Function
-create or replace function public.get_top_ewaste_categories(limit_count integer)
-returns table(category text, count integer)
-language sql
-as $$
-  select category, count(*) as count
-  from public.objects
-  group by category
-  order by count desc
-  limit limit_count;
-$$;

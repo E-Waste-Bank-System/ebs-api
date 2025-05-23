@@ -53,6 +53,8 @@ export async function createValidation(req: any, res: Response, next: NextFuncti
         },
         confidence_score: detection.confidence || 0,
         corrected_category: !is_accurate && feedback ? feedback : detection.category,
+        original_price: detection.regression_result || null,
+        corrected_price: !is_accurate && feedback ? null : detection.regression_result || null,
         model_version: detection.detection_source || 'unknown',
         user_id: req.user.id,
         object_id: object_id

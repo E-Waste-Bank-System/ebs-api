@@ -11,7 +11,9 @@ export async function createRetrainingEntry(req: Request, res: Response, next: N
       confidence_score,
       model_version,
       user_id,
-      object_id
+      object_id,
+      original_price,
+      corrected_price
     } = req.body;
 
     // Validate required fields
@@ -27,6 +29,8 @@ export async function createRetrainingEntry(req: Request, res: Response, next: N
       bbox_coordinates,
       confidence_score: parseFloat(confidence_score) || 0,
       corrected_category: null,
+      original_price: original_price ? parseFloat(original_price) : null,
+      corrected_price: corrected_price ? parseFloat(corrected_price) : null,
       model_version,
       user_id,
       object_id

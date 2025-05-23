@@ -292,6 +292,34 @@ export async function createDetection(req: Request, res: Response, next: NextFun
             let risk_lvl: number | null = null;
             let validatedCategory = category;
 
+            // Get price prediction for the validated category
+            let originalPrice: number | null = null;
+            let correctedPrice: number | null = null;
+            try {
+              const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
+                object: validatedCategory
+              });
+              regression_result = (priceResponse.data as { price: number }).price;
+              correctedPrice = regression_result;
+            } catch (priceErr) {
+              console.error('Price prediction failed:', priceErr);
+              regression_result = null;
+              correctedPrice = null;
+            }
+
+            // Get original price prediction if category is different
+            if (validatedCategory !== yoloClassName) {
+              try {
+                const originalPriceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
+                  object: yoloClassName
+                });
+                originalPrice = (originalPriceResponse.data as { price: number }).price;
+              } catch (priceErr) {
+                console.error('Original price prediction failed:', priceErr);
+                originalPrice = null;
+              }
+            }
+
             // Extract bounding box coordinates from YOLO prediction
             const bbox = yoloPred?.bbox || [0, 0, 0, 0];
             const bbox_coordinates = {
@@ -423,6 +451,8 @@ Risk Level: <number 1-10>`;
                 },
                 confidence_score: confidence,
                 corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
+                original_price: originalPrice,
+                corrected_price: correctedPrice,
                 model_version: 'YOLOv11',
                 user_id,
                 object_id: detectionId
@@ -439,7 +469,7 @@ Risk Level: <number 1-10>`;
               confidence,
               regression_result,
               description,
-              suggestion: suggestionArray.join(' | '),
+              suggestion: suggestionArray,
               risk_lvl,
               detection_source: detectionSource,
               image_url: imageUrl
@@ -500,16 +530,28 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
       detection_source
     );
     
-    // Transform suggestions from pipe-separated strings to arrays
-    const transformedData = data.map(item => {
-      if (item.suggestion) {
-        return {
-          ...item,
-          suggestion: item.suggestion.split(' | ')
-        };
+    // Transform suggestions from pipe-separated strings to arrays and get price predictions
+    const transformedData = await Promise.all(data.map(async item => {
+      let transformedItem = { ...item };
+      
+      // Always ensure suggestion is an array
+      transformedItem.suggestion = item.suggestion ? item.suggestion.split(' | ') : [];
+
+      // Get price prediction if not already present
+      if (!item.regression_result && item.category) {
+        try {
+          const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
+            object: item.category
+          });
+          transformedItem.regression_result = (priceResponse.data as { price: number }).price;
+        } catch (priceErr) {
+          console.error('Price prediction failed:', priceErr);
+          transformedItem.regression_result = null;
+        }
       }
-      return item;
-    });
+      
+      return transformedItem;
+    }));
   
     res.json({
       data: transformedData,
@@ -527,18 +569,30 @@ export async function getDetectionsByUser(req: Request, res: Response, next: Nex
   try {
     const data = await detectionService.getDetectionsByUser(req.params.userId);
     
-    // Transform prediction suggestions from pipe-separated strings to arrays
-    const transformedData = data.map(scan => {
+    // Transform prediction suggestions from pipe-separated strings to arrays and get price predictions
+    const transformedData = await Promise.all(data.map(async scan => {
       if (scan.prediction && Array.isArray(scan.prediction)) {
-        const transformedPredictions = scan.prediction.map(pred => {
-          if (pred.suggestion && typeof pred.suggestion === 'string') {
-            return {
-              ...pred,
-              suggestion: pred.suggestion.split(' | ')
-            };
+        const transformedPredictions = await Promise.all(scan.prediction.map(async pred => {
+          let transformedPred = { ...pred };
+          
+          // Always ensure suggestion is an array
+          transformedPred.suggestion = pred.suggestion ? pred.suggestion.split(' | ') : [];
+
+          // Get price prediction if not already present
+          if (!pred.regression_result && pred.category) {
+            try {
+              const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
+                object: pred.category
+              });
+              transformedPred.regression_result = (priceResponse.data as { price: number }).price;
+            } catch (priceErr) {
+              console.error('Price prediction failed:', priceErr);
+              transformedPred.regression_result = null;
+            }
           }
-          return pred;
-        });
+          
+          return transformedPred;
+        }));
         
         return {
           ...scan,
@@ -546,7 +600,7 @@ export async function getDetectionsByUser(req: Request, res: Response, next: Nex
         };
       }
       return scan;
-    });
+    }));
     
     res.json(transformedData);
   } catch (err) {
@@ -558,16 +612,31 @@ export async function getDetectionById(req: Request, res: Response, next: NextFu
   try {
     const data = await detectionService.getDetectionById(req.params.id);
     
-    // Transform suggestion from pipe-separated string to array
-    if (data && data.suggestion) {
-      const responseData = {
-        ...data,
-        suggestion: data.suggestion.split(' | ')
-      };
-      res.json(responseData);
-    } else {
-      res.json(data);
+    if (!data) {
+      res.status(404).json({ message: 'Detection not found' });
+      return;
     }
+
+    // Transform suggestion from pipe-separated string to array and get price prediction
+    let responseData = { ...data };
+    
+    // Always ensure suggestion is an array
+    responseData.suggestion = data.suggestion ? data.suggestion.split(' | ') : [];
+
+    // Get price prediction if not already present
+    if (!data.regression_result && data.category) {
+      try {
+        const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
+          object: data.category
+        });
+        responseData.regression_result = (priceResponse.data as { price: number }).price;
+      } catch (priceErr) {
+        console.error('Price prediction failed:', priceErr);
+        responseData.regression_result = null;
+      }
+    }
+
+    res.json(responseData);
   } catch (err) {
     next(err);
   }

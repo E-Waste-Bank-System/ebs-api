@@ -439,7 +439,7 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
 
             try {
                 const enrichmentPrompt = `This image shows a ${category} e-waste item.
-Provide a description (10-40 words), up to 3 suggestions for handling, and a destruction level (1-10).
+Provide a description (10-40 words), up to 3 suggestions for handling, and a damage level (0-10).
 Respond in this exact format without additional explanations:
 
 Description: <short description 10-40 words in indonesian>

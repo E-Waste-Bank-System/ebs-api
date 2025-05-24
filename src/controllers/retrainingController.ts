@@ -161,4 +161,20 @@ export async function exportVerifiedData(req: Request, res: Response, next: Next
   } catch (err) {
     next(err);
   }
-} 
+}
+
+export async function getRetrainingDataByObjectId(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { object_id } = req.params;
+    const data = await retrainingService.getRetrainingDataByObjectId(object_id);
+    
+    if (!data) {
+      res.status(404).json({ message: 'No retraining data found for this object' });
+      return;
+    }
+    
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}

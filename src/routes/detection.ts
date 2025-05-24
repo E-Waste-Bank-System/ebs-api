@@ -63,9 +63,11 @@ const router = Router();
  *           nullable: true
  *           description: AI-generated description of the item in Indonesian (10-40 words)
  *         suggestion:
- *           type: string
+ *           type: array
+ *           items:
+ *             type: string
  *           nullable: true
- *           description: AI-generated suggestions for handling the e-waste (up to 3 points, joined by ' | ')
+ *           description: AI-generated suggestions for handling the e-waste (up to 3 points)
  *         risk_lvl:
  *           type: integer
  *           minimum: 1

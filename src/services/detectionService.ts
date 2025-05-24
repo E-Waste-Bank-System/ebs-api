@@ -2,6 +2,65 @@ import supabase from '../utils/supabase';
 import { Detection } from '../models/detectionModel';
 import { v4 as uuidv4 } from 'uuid';
 
+// Utility function to properly parse suggestion fragments into complete sentences
+function parseSuggestionFragments(suggestionString: string): string[] {
+  if (!suggestionString) return [];
+  
+  // Split by pipe separator
+  const fragments = suggestionString.split('|').map(s => s.trim()).filter(s => s);
+  
+  if (fragments.length === 0) return [];
+  
+  const suggestions: string[] = [];
+  let currentSuggestion = '';
+  
+  for (let i = 0; i < fragments.length; i++) {
+    const fragment = fragments[i];
+    
+    // If current suggestion is empty, start a new one
+    if (!currentSuggestion) {
+      currentSuggestion = fragment;
+    } else {
+      // Check if this fragment should be combined with the previous one
+      const shouldCombine = (
+        // Previous fragment doesn't end with sentence-ending punctuation
+        !/[.!?]$/.test(currentSuggestion.trim()) ||
+        // Current fragment doesn't start with capital letter (likely a continuation)
+        !/^[A-Z]/.test(fragment.trim()) ||
+        // Previous fragment ends with comma, suggesting continuation
+        /,$/.test(currentSuggestion.trim()) ||
+        // Previous fragment is very short (likely incomplete)
+        currentSuggestion.trim().length < 10
+      );
+      
+      if (shouldCombine) {
+        // Combine with previous fragment
+        const needsSpace = !currentSuggestion.endsWith(' ') && !fragment.startsWith(' ');
+        const needsComma = /^[a-z]/.test(fragment.trim()) && !/[.!?,:;]$/.test(currentSuggestion.trim());
+        
+        if (needsComma && needsSpace) {
+          currentSuggestion += ', ' + fragment;
+        } else if (needsSpace) {
+          currentSuggestion += ' ' + fragment;
+        } else {
+          currentSuggestion += fragment;
+        }
+      } else {
+        // Finish current suggestion and start a new one
+        suggestions.push(currentSuggestion.trim());
+        currentSuggestion = fragment;
+      }
+    }
+  }
+  
+  // Don't forget to add the last suggestion
+  if (currentSuggestion.trim()) {
+    suggestions.push(currentSuggestion.trim());
+  }
+  
+  return suggestions;
+}
+
 export interface DetectionWithPredictions {
   id: string;
   user_id: string | null;
@@ -12,7 +71,7 @@ export interface DetectionWithPredictions {
     confidence: number;
     regression_result: number | null;
     description: string | null;
-    suggestion: string | null;
+    suggestion: string[];
     risk_lvl: number | null;
     detection_source: string | null;
   }>;
@@ -195,7 +254,7 @@ export async function getDetectionsByUser(userId: string) {
         confidence: obj.confidence || 0,
         regression_result: obj.regression_result ?? null,
         description: obj.description ?? null,
-        suggestion: obj.suggestion ?? null,
+        suggestion: obj.suggestion ? parseSuggestionFragments(obj.suggestion) : [],
         risk_lvl: obj.risk_lvl ?? null,
         detection_source: obj.detection_source ?? null
       })),
@@ -216,6 +275,15 @@ export async function getDetectionById(id: string) {
     .eq('id', id)
     .single();
   if (error) throw error;
+  
+  // Transform suggestion from pipe-separated string to array
+  if (data) {
+    return {
+      ...data,
+      suggestion: data.suggestion ? parseSuggestionFragments(data.suggestion) : []
+    };
+  }
+  
   return data;
 }
 
@@ -252,5 +320,14 @@ export async function updateDetection(id: string, fields: Partial<Detection>) {
     .single();
     
   if (error) throw error;
+  
+  // Transform suggestion from pipe-separated string to array
+  if (data) {
+    return {
+      ...data,
+      suggestion: data.suggestion ? parseSuggestionFragments(data.suggestion) : []
+    };
+  }
+  
   return data;
-} 
+}

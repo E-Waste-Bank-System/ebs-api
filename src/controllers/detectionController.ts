@@ -10,6 +10,65 @@ import { AuthRequest } from '../middlewares/auth';
 import FormData from 'form-data';
 import supabase from '../utils/supabase';
 
+// Utility function to properly parse suggestion fragments into complete sentences
+function parseSuggestionFragments(suggestionString: string): string[] {
+  if (!suggestionString) return [];
+  
+  // Split by pipe separator
+  const fragments = suggestionString.split('|').map(s => s.trim()).filter(s => s);
+  
+  if (fragments.length === 0) return [];
+  
+  const suggestions: string[] = [];
+  let currentSuggestion = '';
+  
+  for (let i = 0; i < fragments.length; i++) {
+    const fragment = fragments[i];
+    
+    // If current suggestion is empty, start a new one
+    if (!currentSuggestion) {
+      currentSuggestion = fragment;
+    } else {
+      // Check if this fragment should be combined with the previous one
+      const shouldCombine = (
+        // Previous fragment doesn't end with sentence-ending punctuation
+        !/[.!?]$/.test(currentSuggestion.trim()) ||
+        // Current fragment doesn't start with capital letter (likely a continuation)
+        !/^[A-Z]/.test(fragment.trim()) ||
+        // Previous fragment ends with comma, suggesting continuation
+        /,$/.test(currentSuggestion.trim()) ||
+        // Previous fragment is very short (likely incomplete)
+        currentSuggestion.trim().length < 10
+      );
+      
+      if (shouldCombine) {
+        // Combine with previous fragment
+        const needsSpace = !currentSuggestion.endsWith(' ') && !fragment.startsWith(' ');
+        const needsComma = /^[a-z]/.test(fragment.trim()) && !/[.!?,:;]$/.test(currentSuggestion.trim());
+        
+        if (needsComma && needsSpace) {
+          currentSuggestion += ', ' + fragment;
+        } else if (needsSpace) {
+          currentSuggestion += ' ' + fragment;
+        } else {
+          currentSuggestion += fragment;
+        }
+      } else {
+        // Finish current suggestion and start a new one
+        suggestions.push(currentSuggestion.trim());
+        currentSuggestion = fragment;
+      }
+    }
+  }
+  
+  // Don't forget to add the last suggestion
+  if (currentSuggestion.trim()) {
+    suggestions.push(currentSuggestion.trim());
+  }
+  
+  return suggestions;
+}
+
 // Types for database entities
 interface Scan {
   id: string;
@@ -377,28 +436,35 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
             // If no mapping found, try using class index
             if (!category && classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) {
               category = CLASS_NAMES[classIdx];
+            }            // Compare YOLO category with Gemini's validated category
+            let validatedCategory = category;
+            let detectionSource: string;
+            
+            if (category === geminiCategory) {
+              // YOLO detected the same category as Gemini confirmed
+              detectionSource = 'YOLO';
+              validatedCategory = category;
+            } else {
+              // Gemini's category differs from YOLO's - use Gemini's category
+              detectionSource = 'Gemini Interfered';
+              validatedCategory = geminiCategory;
             }
-
-              // If YOLO category doesn't match Gemini's category, skip this prediction
-              if (category !== geminiCategory) {
-                continue;
-              }
             
             console.log('Processing prediction:', { 
               detectionId, 
               yoloClassName,
-              mappedCategory: category,
-              classIdx 
+              yoloCategory: category,
+              geminiCategory,
+              finalCategory: validatedCategory,
+              detectionSource
             });
             
             const confidence = yoloPred?.confidence !== undefined ? yoloPred.confidence : 0.1;
-              let detectionSource = 'YOLO + Gemini';
             
             let regression_result: number | null = null;
             let description: string | null = null;
             let suggestionArray: string[] = [];
             let risk_lvl: number | null = null;
-            let validatedCategory = category;
 
               // Get price prediction for the validated category
               let originalPrice: number | null = null;
@@ -443,7 +509,7 @@ Provide a description (10-40 words), up to 3 suggestions for handling, and a dam
 Respond in this exact format without additional explanations:
 
 Description: <short description 10-40 words in indonesian>
-Suggestions: <suggestion1 exactly 7-15 words in indonesian>, <suggestion2 exactly 7-15 words in indonesian>, <suggestion3 exactly 7-15 words in indonesian>
+Suggestions: <suggestion1 exactly 7-15 words in indonesian>|<suggestion2 exactly 7-15 words in indonesian>|<suggestion3 exactly 7-15 words in indonesian>
 Risk Level: <number 1-10>`;
               
                 const geminiEnrichmentRes = await axios.post<GeminiResponse>(GEMINI_API_URL, {
@@ -475,7 +541,7 @@ Risk Level: <number 1-10>`;
               
                 const suggestionsMatch = enrichmentText.match(/Suggestions:\s*(.+?)(?=\n|$)/i);
               if (suggestionsMatch) {
-                suggestionArray = suggestionsMatch[1].split(',').map((s: string) => s.trim());
+                suggestionArray = suggestionsMatch[1].split('|').map((s: string) => s.trim());
               }
               
                 const riskMatch = enrichmentText.match(/Risk Level:\s*(\d+)/i);
@@ -653,9 +719,15 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
 
       // Only include scans that have objects after filtering
       if (filteredObjects.length > 0) {
+        // Transform suggestion fields from pipe-separated strings to arrays with intelligent parsing
+        const transformedObjects = filteredObjects.map(obj => ({
+          ...obj,
+          suggestion: obj.suggestion ? parseSuggestionFragments(obj.suggestion) : []
+        }));
+        
         scansWithObjects.push({
           ...scan,
-          objects: filteredObjects
+          objects: transformedObjects
         });
       }
     }
@@ -704,9 +776,15 @@ export async function getDetectionsByUser(req: Request, res: Response, next: Nex
         throw objectsError;
       }
 
+      // Transform suggestion fields from pipe-separated strings to arrays with intelligent parsing
+      const transformedObjects = (objects || []).map(obj => ({
+        ...obj,
+        suggestion: obj.suggestion ? parseSuggestionFragments(obj.suggestion) : []
+      }));
+
       scansWithObjects.push({
           ...scan,
-        objects: objects || []
+        objects: transformedObjects
     });
     }
     
@@ -745,7 +823,13 @@ export async function getDetectionById(req: Request, res: Response, next: NextFu
       return;
     }
 
-    res.json(object);
+    // Transform suggestion from pipe-separated string to array with intelligent parsing
+    const transformedObject = {
+      ...object,
+      suggestion: object.suggestion ? parseSuggestionFragments(object.suggestion) : []
+    };
+
+    res.json(transformedObject);
   } catch (err) {
     next(err);
   }

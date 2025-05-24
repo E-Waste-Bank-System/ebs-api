@@ -310,6 +310,36 @@ router.get('/:id', isAuthenticated, retrainingController.getRetrainingDataById);
 
 /**
  * @swagger
+ * /retraining/object/{object_id}:
+ *   get:
+ *     summary: Get retraining data by object ID
+ *     description: Retrieve retraining data for a specific object/detection
+ *     tags: [Retraining]
+ *     security: [ { bearerAuth: [] } ]
+ *     parameters:
+ *       - in: path
+ *         name: object_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: ID of the object/detection
+ *     responses:
+ *       200:
+ *         description: Retraining data entry for the object
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RetrainingData'
+ *       404:
+ *         description: No retraining data found for this object
+ *       401:
+ *         description: Unauthorized - valid token required
+ */
+router.get('/object/:object_id', isAuthenticated, retrainingController.getRetrainingDataByObjectId);
+
+/**
+ * @swagger
  * /retraining/{id}:
  *   put:
  *     summary: Update a retraining data entry
@@ -423,4 +453,4 @@ router.post('/:id/verify', isAuthenticated, retrainingController.verifyRetrainin
  */
 router.delete('/:id', isAuthenticated, retrainingController.deleteRetrainingData);
 
-export default router; 
+export default router;

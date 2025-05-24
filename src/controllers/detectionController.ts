@@ -8,6 +8,43 @@ import env from '../config/env';
 import axios from 'axios';
 import { AuthRequest } from '../middlewares/auth';
 import FormData from 'form-data';
+import supabase from '../utils/supabase';
+
+// Types for database entities
+interface Scan {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  created_at: string;
+  updated_at: string;
+}
+
+interface Object {
+  id: string;
+  user_id: string;
+  scan_id: string;
+  image_url: string;
+  detection_source: string;
+  category: string;
+  confidence: number;
+  regression_result: number | null;
+  description: string | null;
+  suggestion: string | null;
+  risk_lvl: number;
+  bbox_coordinates: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
+  is_validated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ScanWithObjects extends Scan {
+  objects: Object[];
+}
 
 // Interface for Gemini API response
 interface GeminiResponse {
@@ -300,17 +337,17 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
         }
 
         // If Gemini confirms it's e-waste, proceed with YOLO detection
-        const formData = new FormData();
-        formData.append('file', req.file.buffer, req.file.originalname);
-        
-        console.log('Sending request to YOLO service...');
-        const yoloRes = await axios.post(env.yoloUrl, formData, {
-          headers: formData.getHeaders(),
-        });
-        console.log('YOLO service response received');
-        
-        const yoloData = yoloRes.data as any;
-        const predictions = yoloData.predictions || [];
+      const formData = new FormData();
+      formData.append('file', req.file.buffer, req.file.originalname);
+      
+      console.log('Sending request to YOLO service...');
+      const yoloRes = await axios.post(env.yoloUrl, formData, {
+        headers: formData.getHeaders(),
+      });
+      console.log('YOLO service response received');
+      
+      const yoloData = yoloRes.data as any;
+      const predictions = yoloData.predictions || [];
         
         // Return early if no predictions found
         if (!predictions || predictions.length === 0) {
@@ -319,49 +356,49 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
           });
           return;
         }
+      
+      console.log('Creating scan record...');
+      try {
+        const scan = await detectionService.createScan(user_id);
+        const scanId = scan.id;
+        console.log('Scan record created:', scanId);
+        
+        const predictionsArray = [];
 
-        console.log('Creating scan record...');
-        try {
-          const scan = await detectionService.createScan(user_id);
-          const scanId = scan.id;
-          console.log('Scan record created:', scanId);
-          
-          const predictionsArray = [];
-
-          for (const yoloPred of predictions) {
-            try {
-              const detectionId = uuidv4();
-              const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
-              const yoloClassName = yoloPred?.class_name || '';
-              
-              // Map YOLO class name to our category
-              let category = YOLO_TO_CATEGORY_MAP[yoloClassName] || '';
-              
-              // If no mapping found, try using class index
-              if (!category && classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) {
-                category = CLASS_NAMES[classIdx];
-              }
+        for (const yoloPred of predictions) {
+          try {
+            const detectionId = uuidv4();
+            const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
+            const yoloClassName = yoloPred?.class_name || '';
+            
+            // Map YOLO class name to our category
+            let category = YOLO_TO_CATEGORY_MAP[yoloClassName] || '';
+            
+            // If no mapping found, try using class index
+            if (!category && classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) {
+              category = CLASS_NAMES[classIdx];
+            }
 
               // If YOLO category doesn't match Gemini's category, skip this prediction
               if (category !== geminiCategory) {
                 continue;
               }
-              
-              console.log('Processing prediction:', { 
-                detectionId, 
-                yoloClassName,
-                mappedCategory: category,
-                classIdx 
-              });
-              
-              const confidence = yoloPred?.confidence !== undefined ? yoloPred.confidence : 0.1;
+            
+            console.log('Processing prediction:', { 
+              detectionId, 
+              yoloClassName,
+              mappedCategory: category,
+              classIdx 
+            });
+            
+            const confidence = yoloPred?.confidence !== undefined ? yoloPred.confidence : 0.1;
               let detectionSource = 'YOLO + Gemini';
-              
-              let regression_result: number | null = null;
-              let description: string | null = null;
-              let suggestionArray: string[] = [];
-              let risk_lvl: number | null = null;
-              let validatedCategory = category;
+            
+            let regression_result: number | null = null;
+            let description: string | null = null;
+            let suggestionArray: string[] = [];
+            let risk_lvl: number | null = null;
+            let validatedCategory = category;
 
               // Get price prediction for the validated category
               let originalPrice: number | null = null;
@@ -391,130 +428,130 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
                 }
               }
 
-              // Extract bounding box coordinates from YOLO prediction
-              const bbox = yoloPred?.bbox || [0, 0, 0, 0];
-              const bbox_coordinates = {
-                x: bbox[0],
-                y: bbox[1],
-                width: bbox[2] - bbox[0],
-                height: bbox[3] - bbox[1]
-              };
+            // Extract bounding box coordinates from YOLO prediction
+            const bbox = yoloPred?.bbox || [0, 0, 0, 0];
+            const bbox_coordinates = {
+              x: bbox[0],
+              y: bbox[1],
+              width: bbox[2] - bbox[0],
+              height: bbox[3] - bbox[1]
+            };
 
-              try {
+            try {
                 const enrichmentPrompt = `This image shows a ${category} e-waste item.
-Provide a description (10-40 words), up to 3 suggestions for handling, and a risk level (1-10).
+Provide a description (10-40 words), up to 3 suggestions for handling, and a destruction level (1-10).
 Respond in this exact format without additional explanations:
 
 Description: <short description 10-40 words in indonesian>
 Suggestions: <suggestion1 exactly 7-15 words in indonesian>, <suggestion2 exactly 7-15 words in indonesian>, <suggestion3 exactly 7-15 words in indonesian>
 Risk Level: <number 1-10>`;
-                
+              
                 const geminiEnrichmentRes = await axios.post<GeminiResponse>(GEMINI_API_URL, {
-                  contents: [
-                    {
-                      parts: [
+                contents: [
+                  {
+                    parts: [
                         { text: enrichmentPrompt },
-                        {
-                          inline_data: {
-                            mime_type: req.file.mimetype,
-                            data: imageBase64
-                          }
+                      {
+                        inline_data: {
+                          mime_type: req.file.mimetype,
+                          data: imageBase64
                         }
-                      ]
-                    }
-                  ],
-                  generationConfig: {
-                    temperature: 0.9,
-                    topP: 0.8,
-                    topK: 40,
-                    maxOutputTokens: 2500
+                      }
+                    ]
                   }
-                });
-                
+                ],
+                generationConfig: {
+                  temperature: 0.9,
+                  topP: 0.8,
+                  topK: 40,
+                    maxOutputTokens: 2500
+                }
+              });
+              
                 const enrichmentText = geminiEnrichmentRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
                 
                 const descriptionMatch = enrichmentText.match(/Description:\s*(.+?)(?=\n|$)/i);
-                description = descriptionMatch ? descriptionMatch[1].trim() : null;
-                
-                const suggestionsMatch = enrichmentText.match(/Suggestions:\s*(.+?)(?=\n|$)/i);
-                if (suggestionsMatch) {
-                  suggestionArray = suggestionsMatch[1].split(',').map((s: string) => s.trim());
-                }
-                
-                const riskMatch = enrichmentText.match(/Risk Level:\s*(\d+)/i);
-                if (riskMatch) {
-                  const risk = parseInt(riskMatch[1]);
-                  if (!isNaN(risk) && risk >= 1 && risk <= 10) {
-                    risk_lvl = risk;
-                  }
-                }
-              } catch (err) {
-                const error = err as any;
-                console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
-                description = null;
-                suggestionArray = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
-                risk_lvl = null;
-              }
-
-              console.log('Creating detection record...');
-              const detection = await detectionService.createDetection({
-                id: detectionId,
-                user_id,
-                scan_id: scanId,
-                image_url: imageUrl,
-                detection_source: detectionSource,
-                category: validatedCategory,
-                confidence,
-                regression_result,
-                description,
-                suggestion: suggestionArray.join(' | ') || '',
-                risk_lvl
-              });
-              console.log('Detection record created successfully:', detectionId);
+              description = descriptionMatch ? descriptionMatch[1].trim() : null;
               
-              // Create retraining data entry from the detection
-              try {
-                await retrainingService.createRetrainingData({
-                  image_url: imageUrl,
-                  original_category: yoloClassName,
-                  bbox_coordinates: {
-                    x: bbox[0],
-                    y: bbox[1],
-                    width: bbox[2] - bbox[0],
-                    height: bbox[3] - bbox[1]
-                  },
-                  confidence_score: confidence,
-                  corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
+                const suggestionsMatch = enrichmentText.match(/Suggestions:\s*(.+?)(?=\n|$)/i);
+              if (suggestionsMatch) {
+                suggestionArray = suggestionsMatch[1].split(',').map((s: string) => s.trim());
+              }
+              
+                const riskMatch = enrichmentText.match(/Risk Level:\s*(\d+)/i);
+              if (riskMatch) {
+                const risk = parseInt(riskMatch[1]);
+                if (!isNaN(risk) && risk >= 1 && risk <= 10) {
+                  risk_lvl = risk;
+                }
+              }
+            } catch (err) {
+              const error = err as any;
+              console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
+              description = null;
+              suggestionArray = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
+              risk_lvl = null;
+            }
+
+            console.log('Creating detection record...');
+            const detection = await detectionService.createDetection({
+              id: detectionId,
+              user_id,
+              scan_id: scanId,
+              image_url: imageUrl,
+              detection_source: detectionSource,
+              category: validatedCategory,
+              confidence,
+              regression_result,
+              description,
+              suggestion: suggestionArray.join(' | ') || '',
+              risk_lvl
+            });
+            console.log('Detection record created successfully:', detectionId);
+            
+            // Create retraining data entry from the detection
+            try {
+              await retrainingService.createRetrainingData({
+                image_url: imageUrl,
+                original_category: yoloClassName,
+                bbox_coordinates: {
+                  x: bbox[0],
+                  y: bbox[1],
+                  width: bbox[2] - bbox[0],
+                  height: bbox[3] - bbox[1]
+                },
+                confidence_score: confidence,
+                corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
                   original_price: originalPrice,
                   corrected_price: correctedPrice,
-                  model_version: 'YOLOv11',
-                  user_id,
-                  object_id: detectionId
-                });
-                console.log('Retraining data record created for detection:', detectionId);
-              } catch (retrainErr) {
-                console.error('Failed to create retraining data:', retrainErr);
-              }
-              
-              predictionsArray.push({
-                id: detectionId,
-                category: validatedCategory,
-                confidence,
-                regression_result,
-                description,
-                suggestion: suggestionArray,
-                risk_lvl,
-                detection_source: detectionSource,
-                image_url: imageUrl
+                model_version: 'YOLOv11',
+                user_id,
+                object_id: detectionId
               });
-            } catch (err) {
-              console.error('Error processing individual prediction:', {
-                error: err,
-                prediction: yoloPred
-              });
-              continue;
+              console.log('Retraining data record created for detection:', detectionId);
+            } catch (retrainErr) {
+              console.error('Failed to create retraining data:', retrainErr);
             }
+            
+            predictionsArray.push({
+              id: detectionId,
+              category: validatedCategory,
+              confidence,
+              regression_result,
+              description,
+                suggestion: suggestionArray,
+              risk_lvl,
+              detection_source: detectionSource,
+              image_url: imageUrl
+            });
+          } catch (err) {
+            console.error('Error processing individual prediction:', {
+              error: err,
+              prediction: yoloPred
+            });
+            continue;
           }
+        }
 
           // If no predictions were processed (all were filtered out), return no e-waste message
           if (predictionsArray.length === 0) {
@@ -524,17 +561,17 @@ Risk Level: <number 1-10>`;
             return;
           }
 
-          res.status(201).json({
-            message: 'Detection created successfully',
-            scan_id: scanId,
-            predictions: predictionsArray
-          });
-        } catch (err) {
-          console.error('Error creating scan record:', {
-            error: err,
-            userId: user_id
-          });
-          throw err;
+        res.status(201).json({
+          message: 'Detection created successfully',
+          scan_id: scanId,
+          predictions: predictionsArray
+        });
+      } catch (err) {
+        console.error('Error creating scan record:', {
+          error: err,
+          userId: user_id
+        });
+        throw err;
         }
       } catch (err) {
         console.error('Error in Gemini validation:', err);
@@ -570,39 +607,65 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
     const category = req.query.category as string;
     const detection_source = req.query.detection_source as string;
 
-    const { data, total, last_page } = await getAllDetectionsWithFilters(
-      limit, 
-      offset, 
-      search, 
-      category, 
-      detection_source
-    );
-    
-    // Transform suggestions from pipe-separated strings to arrays and get price predictions
-    const transformedData = await Promise.all(data.map(async item => {
-      let transformedItem = { ...item };
-      
-      // Always ensure suggestion is an array
-      transformedItem.suggestion = item.suggestion ? item.suggestion.split(' | ') : [];
+    // First, get all scans with pagination
+    const { data: scans, error: scansError } = await supabase
+      .from('scans')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-      // Get price prediction if not already present
-      if (!item.regression_result && item.category) {
-        try {
-          const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-            object: item.category
-          });
-          transformedItem.regression_result = (priceResponse.data as { price: number }).price;
-        } catch (priceErr) {
-          console.error('Price prediction failed:', priceErr);
-          transformedItem.regression_result = null;
-        }
+    if (scansError) {
+      throw scansError;
+    }
+
+    // Get total count for pagination
+    const { count, error: countError } = await supabase
+      .from('scans')
+      .select('*', { count: 'exact', head: true });
+
+    if (countError) {
+      throw countError;
+    }
+
+    // Get objects for each scan
+    const scansWithObjects: ScanWithObjects[] = [];
+    for (const scan of scans) {
+      // Get objects for this scan
+      const { data: objects, error: objectsError } = await supabase
+        .from('objects')
+        .select('*')
+        .eq('scan_id', scan.id)
+        .order('created_at', { ascending: false });
+
+      if (objectsError) {
+        throw objectsError;
       }
-      
-      return transformedItem;
-    }));
+
+      // Filter objects if category or detection_source is provided
+      let filteredObjects = objects;
+      if (category || detection_source) {
+        filteredObjects = objects.filter(obj => {
+          const categoryMatch = !category || obj.category === category;
+          const sourceMatch = !detection_source || obj.detection_source === detection_source;
+          return categoryMatch && sourceMatch;
+        });
+      }
+
+      // Only include scans that have objects after filtering
+      if (filteredObjects.length > 0) {
+        scansWithObjects.push({
+          ...scan,
+          objects: filteredObjects
+        });
+      }
+    }
+
+    // Calculate total pages
+    const total = count || 0;
+    const last_page = Math.ceil(total / limit);
   
     res.json({
-      data: transformedData,
+      data: scansWithObjects,
       total,
       current_page: page,
       last_page,
@@ -615,42 +678,39 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
 
 export async function getDetectionsByUser(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await detectionService.getDetectionsByUser(req.params.userId);
+    const userId = req.params.userId;
     
-    // Transform prediction suggestions from pipe-separated strings to arrays and get price predictions
-    const transformedData = await Promise.all(data.map(async scan => {
-      if (scan.prediction && Array.isArray(scan.prediction)) {
-        const transformedPredictions = await Promise.all(scan.prediction.map(async pred => {
-          let transformedPred = { ...pred };
-          
-          // Always ensure suggestion is an array
-          transformedPred.suggestion = pred.suggestion ? pred.suggestion.split(' | ') : [];
+    // Get all scans for the user
+    const { data: scans, error: scansError } = await supabase
+      .from('scans')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
 
-          // Get price prediction if not already present
-          if (!pred.regression_result && pred.category) {
-            try {
-              const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-                object: pred.category
-              });
-              transformedPred.regression_result = (priceResponse.data as { price: number }).price;
-            } catch (priceErr) {
-              console.error('Price prediction failed:', priceErr);
-              transformedPred.regression_result = null;
-            }
-          }
-          
-          return transformedPred;
-        }));
-        
-        return {
-          ...scan,
-          prediction: transformedPredictions
-        };
+    if (scansError) {
+      throw scansError;
+    }
+
+    // Get objects for each scan
+    const scansWithObjects: ScanWithObjects[] = [];
+    for (const scan of scans) {
+      const { data: objects, error: objectsError } = await supabase
+        .from('objects')
+        .select('*')
+        .eq('scan_id', scan.id)
+        .order('created_at', { ascending: false });
+
+      if (objectsError) {
+        throw objectsError;
       }
-      return scan;
-    }));
+
+      scansWithObjects.push({
+          ...scan,
+        objects: objects || []
+    });
+    }
     
-    res.json(transformedData);
+    res.json(scansWithObjects);
   } catch (err) {
     next(err);
   }
@@ -658,33 +718,34 @@ export async function getDetectionsByUser(req: Request, res: Response, next: Nex
 
 export async function getDetectionById(req: Request, res: Response, next: NextFunction) {
   try {
-    const data = await detectionService.getDetectionById(req.params.id);
+    const objectId = req.params.id;
     
-    if (!data) {
+    // Get the specific object
+    const { data: object, error: objectError } = await supabase
+      .from('objects')
+      .select(`
+        *,
+        scan:scans (
+          id,
+          user_id,
+          status,
+          created_at,
+          updated_at
+        )
+      `)
+      .eq('id', objectId)
+      .single();
+
+    if (objectError) {
+      throw objectError;
+    }
+
+    if (!object) {
       res.status(404).json({ message: 'Detection not found' });
       return;
     }
 
-    // Transform suggestion from pipe-separated string to array and get price prediction
-    let responseData = { ...data };
-    
-    // Always ensure suggestion is an array
-    responseData.suggestion = data.suggestion ? data.suggestion.split(' | ') : [];
-
-    // Get price prediction if not already present
-    if (!data.regression_result && data.category) {
-      try {
-        const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-          object: data.category
-        });
-        responseData.regression_result = (priceResponse.data as { price: number }).price;
-      } catch (priceErr) {
-        console.error('Price prediction failed:', priceErr);
-        responseData.regression_result = null;
-      }
-    }
-
-    res.json(responseData);
+    res.json(object);
   } catch (err) {
     next(err);
   }
@@ -704,8 +765,6 @@ export async function updateDetection(req: AuthRequest, res: Response, next: Nex
     const { id } = req.params;
     const fields = req.body;
     
-    // Make sure the user_id from the authenticated request is included
-    // This ensures the updateDetection service can verify ownership
     if (req.user && req.user.id) {
       fields.user_id = req.user.id;
     }
@@ -726,7 +785,6 @@ export async function updateDetectionImage(req: AuthRequest, res: Response, next
 
     const { id } = req.params;
     
-    // First get the detection to check it exists
     const detection = await detectionService.getDetectionById(id);
     
     if (!detection) {
@@ -734,10 +792,8 @@ export async function updateDetectionImage(req: AuthRequest, res: Response, next
       return;
     }
     
-    // Upload the new image
     const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
     
-    // Update the object image_url directly
     const updated = await detectionService.updateDetection(id, { 
       user_id: req.user?.id,
       image_url: imageUrl

@@ -22,6 +22,7 @@ import userRoutes from './routes/user';
 import upload from './middlewares/upload';
 import { uploadFile } from './controllers/uploadController';
 import ewasteRoutes from './routes/ewaste';
+import scanRoutes from './routes/scan';
 
 /**
  * @swagger
@@ -236,10 +237,11 @@ app.use('/api/articles', articleRoutes);
 app.use('/api/detections', detectionRoutes);
 app.use('/api/validations', validationRoutes);
 app.use('/api/retraining', retrainingRoutes);
-app.get('/api/stats', getStatistics);
+app.use('/api/stats', getStatistics);
 app.use('/api/admins', userRoutes);
 app.post('/api/upload', upload.single('image'), uploadFile);
 app.use('/api/ewaste', ewasteRoutes);
+app.use('/api/scans', scanRoutes);
 
 // Error handling
 app.use(errorHandler);

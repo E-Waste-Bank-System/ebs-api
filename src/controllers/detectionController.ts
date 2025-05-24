@@ -251,6 +251,14 @@ export async function createDetection(req: Request, res: Response, next: NextFun
       const yoloData = yoloRes.data as any;
       const predictions = yoloData.predictions || [];
       
+      // Return early if no predictions found
+      if (!predictions || predictions.length === 0) {
+        res.status(200).json({
+          message: 'No e-waste detected'
+        });
+        return;
+      }
+      
       console.log('Creating scan record...');
       try {
         const scan = await detectionService.createScan(user_id);
@@ -330,7 +338,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
             };
 
             try {
-              const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
+              const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${env.geminiApiKey}`;
               
               const imageBase64 = req.file.buffer.toString('base64');
               
@@ -372,7 +380,7 @@ Risk Level: <number 1-10>`;
                   temperature: 0.9,
                   topP: 0.8,
                   topK: 40,
-                  maxOutputTokens: 1000
+                  maxOutputTokens: 2500
                 }
               });
               

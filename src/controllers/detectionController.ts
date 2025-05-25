@@ -435,12 +435,13 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
             let validatedCategory = category;
             let detectionSource: string;
             
-            if (category === geminiCategory) {
+            // Only use Gemini's category if YOLO didn't detect anything
+            if (!category) {
+              detectionSource = 'Gemini';
+              validatedCategory = geminiCategory;
+            } else {
               detectionSource = 'YOLO';
               validatedCategory = category;
-            } else {
-              detectionSource = 'Gemini Interfered';
-              validatedCategory = geminiCategory;
             }
             
             console.log('Processing prediction:', { 

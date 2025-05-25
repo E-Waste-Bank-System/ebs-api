@@ -406,7 +406,6 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
       const yoloData = yoloRes.data as any;
       const predictions = yoloData.predictions || [];
         
-        // Return early if no predictions found
         if (!predictions || predictions.length === 0) {
           res.status(200).json({
             message: 'No e-waste detected'
@@ -495,7 +494,7 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
             };
 
             try {
-                const enrichmentPrompt = `This image shows a ${category} e-waste item.
+                const enrichmentPrompt = `This image shows a ${validatedCategory} e-waste item.
 Provide a description (10-40 words), up to 3 suggestions for handling, and a damage level (0-10).
 Respond in this exact format without additional explanations:
 
@@ -546,7 +545,7 @@ Risk Level: <number 1-10>`;
               const error = err as any;
               console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
               description = null;
-              suggestionArray = DEFAULT_SUGGESTIONS[category] || DEFAULT_SUGGESTIONS.default;
+              suggestionArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
               risk_lvl = null;
             }
 

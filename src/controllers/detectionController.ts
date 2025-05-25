@@ -348,7 +348,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
 
       // First, validate with Gemini if this is e-waste
       try {
-        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${env.geminiApiKey}`;
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
         const imageBase64 = req.file.buffer.toString('base64');
         
         const validationPrompt = `Analyze this image and determine if it contains electronic waste (e-waste) or electronic devices.

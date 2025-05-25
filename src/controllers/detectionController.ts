@@ -235,7 +235,7 @@ const YOLO_TO_CATEGORY_MAP: { [key: string]: string } = {
   
   // Mobile Devices
   'Smartphone': 'Handphone',
-  'Bar-Phone': 'Telefon',
+  'Bar-Phone': 'Handphone',
   'Smart-Watch': 'Jam Tangan',
   'Tablet': 'Handphone',
   'Camera': 'Camera',
@@ -346,7 +346,6 @@ export async function createDetection(req: Request, res: Response, next: NextFun
       const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
       console.log('Image uploaded successfully:', imageUrl);
 
-      // First, validate with Gemini if this is e-waste
       try {
         const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
         const imageBase64 = req.file.buffer.toString('base64');
@@ -395,7 +394,6 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
           return;
         }
 
-        // If Gemini confirms it's e-waste, proceed with YOLO detection
       const formData = new FormData();
       formData.append('file', req.file.buffer, req.file.originalname);
       
@@ -430,22 +428,18 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
             const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
             const yoloClassName = yoloPred?.class_name || '';
             
-            // Map YOLO class name to our category
             let category = YOLO_TO_CATEGORY_MAP[yoloClassName] || '';
             
-            // If no mapping found, try using class index
             if (!category && classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) {
               category = CLASS_NAMES[classIdx];
-            }            // Compare YOLO category with Gemini's validated category
+            }            
             let validatedCategory = category;
             let detectionSource: string;
             
             if (category === geminiCategory) {
-              // YOLO detected the same category as Gemini confirmed
               detectionSource = 'YOLO';
               validatedCategory = category;
             } else {
-              // Gemini's category differs from YOLO's - use Gemini's category
               detectionSource = 'Gemini Interfered';
               validatedCategory = geminiCategory;
             }
@@ -466,7 +460,6 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
             let suggestionArray: string[] = [];
             let risk_lvl: number | null = null;
 
-              // Get price prediction for the validated category
               let originalPrice: number | null = null;
               let correctedPrice: number | null = null;
               try {
@@ -481,7 +474,6 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
                 correctedPrice = null;
               }
 
-              // Get original price prediction if category is different
               if (validatedCategory !== yoloClassName) {
                 try {
                   const originalPriceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
@@ -494,7 +486,6 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
                 }
               }
 
-            // Extract bounding box coordinates from YOLO prediction
             const bbox = yoloPred?.bbox || [0, 0, 0, 0];
             const bbox_coordinates = {
               x: bbox[0],

@@ -329,328 +329,209 @@ const DEFAULT_SUGGESTIONS: { [key: string]: string[] } = {
 
 export async function createDetection(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    if (!req.file) {
-      res.status(400).json({ message: 'Image file is required' });
-      return;
-    }
-
-    const { user_id } = req.body;
+    const user_id = (req as AuthRequest).user?.id;
     if (!user_id) {
-      res.status(400).json({ message: 'user_id is required' });
+      res.status(401).json({ message: 'Unauthorized' });
       return;
     }
 
-    console.log('Starting detection creation process for user:', user_id);
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ message: 'No file uploaded' });
+      return;
+    }
 
-    try {
-      const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
-      console.log('Image uploaded successfully:', imageUrl);
+    // Create a new scan record
+    const scanId = uuidv4();
+    const { data: scan, error: scanError } = await supabase
+      .from('scans')
+      .insert({
+        id: scanId,
+        user_id: user_id,
+        status: 'processing'
+      })
+      .select()
+      .single();
 
+    if (scanError) {
+      throw scanError;
+    }
+
+    // Upload image to GCS
+    const imageUrl = await uploadImage(file.buffer, file.originalname, file.mimetype);
+
+    // Create form data for YOLO API
+    const formData = new FormData();
+    formData.append('file', file.buffer, {
+      filename: file.originalname,
+      contentType: file.mimetype
+    });
+
+    // Call YOLO API
+    const yoloResponse = await axios.post(`${env.yoloUrl}/object`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      }
+    });
+
+    const yoloPredictions = (yoloResponse.data as { predictions: any[] }).predictions;
+    const predictionsArray = [];
+
+    // Process each prediction
+    for (const yoloPred of yoloPredictions) {
       try {
-        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${env.geminiApiKey}`;
-        const imageBase64 = req.file.buffer.toString('base64');
-        
-        const validationPrompt = `Analyze this image and determine if it contains electronic waste (e-waste) or electronic devices.
-If it contains e-waste, respond with "CONFIRMED" followed by the most likely category from this list: ${CLASS_NAMES.join(', ')}.
-If it does not contain e-waste, respond with "NOT_EWASTE".
-Respond in this exact format without additional explanations:
+        const yoloClassName = yoloPred.class_name;
+        const confidence = yoloPred.confidence;
+        const validatedCategory = YOLO_TO_CATEGORY_MAP[yoloClassName] || yoloClassName;
+        const detectionId = uuidv4();
+        let regression_result = null;
+        let originalPrice = null;
+        let correctedPrice = null;
+        let description = null;
+        let suggestionArray: string[] = [];
+        let risk_lvl = 1;
 
-Status: <CONFIRMED or NOT_EWASTE>
-Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
-
-        const geminiValidationRes = await axios.post<GeminiResponse>(GEMINI_API_URL, {
-          contents: [
-            {
-              parts: [
-                { text: validationPrompt },
-                {
-                  inline_data: {
-                    mime_type: req.file.mimetype,
-                    data: imageBase64
-                  }
-                }
-              ]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.9,
-            topP: 0.8,
-            topK: 40,
-            maxOutputTokens: 2500
+        // Get description and suggestions from Gemini
+        try {
+          const geminiResponse = await axios.post(`${env.geminiApiKey}/generate`, {
+            object: validatedCategory
+          });
+          
+          if (geminiResponse.data && (geminiResponse.data as GeminiResponse).candidates?.[0]) {
+            const text = (geminiResponse.data as GeminiResponse).candidates[0].content.parts[0].text;
+            const [desc, ...suggestions] = text.split('\n').filter((line: string) => line.trim());
+            description = desc;
+            suggestionArray = suggestions.slice(0, 3); // Take only first 3 suggestions
           }
-        });
-
-        const validationText = geminiValidationRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const statusMatch = validationText.match(/Status:\s*(.+?)(?=\n|$)/i);
-        const categoryMatch = validationText.match(/Category:\s*(.+?)(?=\n|$)/i);
-        
-        const status = statusMatch ? statusMatch[1].trim() : '';
-        const geminiCategory = categoryMatch ? categoryMatch[1].trim() : '';
-
-        if (status !== 'CONFIRMED' || !CLASS_NAMES.includes(geminiCategory)) {
-          res.status(200).json({
-            message: 'No e-waste detected'
-          });
-          return;
+        } catch (geminiErr) {
+          console.error('Gemini API call failed:', geminiErr);
         }
 
-      const formData = new FormData();
-      formData.append('file', req.file.buffer, req.file.originalname);
-      
-      console.log('Sending request to YOLO service...');
-      const yoloRes = await axios.post(env.yoloUrl, formData, {
-        headers: formData.getHeaders(),
-      });
-      console.log('YOLO service response received');
-      
-      const yoloData = yoloRes.data as any;
-      const predictions = yoloData.predictions || [];
-        
-        if (!predictions || predictions.length === 0) {
-          res.status(200).json({
-            message: 'No e-waste detected'
+        // Get price prediction
+        try {
+          const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
+            object: validatedCategory
           });
-          return;
+          regression_result = (priceResponse.data as { price: number }).price;
+          correctedPrice = regression_result;
+        } catch (priceErr) {
+          console.error('Price prediction failed:', priceErr);
+          regression_result = null;
+          correctedPrice = null;
         }
-      
-      console.log('Creating scan record...');
-      try {
-        const scan = await detectionService.createScan(user_id);
-        const scanId = scan.id;
-        console.log('Scan record created:', scanId);
-        
-        const predictionsArray = [];
 
-        for (const yoloPred of predictions) {
+        if (validatedCategory !== yoloClassName) {
           try {
-            const detectionId = uuidv4();
-            const classIdx = typeof yoloPred?.class === 'number' ? yoloPred.class : null;
-            const yoloClassName = yoloPred?.class_name || '';
-            
-            let category = YOLO_TO_CATEGORY_MAP[yoloClassName] || '';
-            
-            if (!category && classIdx !== null && classIdx >= 0 && classIdx < CLASS_NAMES.length) {
-              category = CLASS_NAMES[classIdx];
-            }            
-            let validatedCategory = category;
-            let detectionSource: string;
-            
-            // Only use Gemini's category if YOLO didn't detect anything
-            if (!category) {
-              detectionSource = 'Gemini';
-              validatedCategory = geminiCategory;
-            } else {
-              detectionSource = 'YOLO';
-              validatedCategory = category;
-            }
-            
-            console.log('Processing prediction:', { 
-              detectionId, 
-              yoloClassName,
-              yoloCategory: category,
-              geminiCategory,
-              finalCategory: validatedCategory,
-              detectionSource
+            const originalPriceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
+              object: yoloClassName
             });
-            
-            const confidence = yoloPred?.confidence !== undefined ? yoloPred.confidence : 0.1;
-            
-            let regression_result: number | null = null;
-            let description: string | null = null;
-            let suggestionArray: string[] = [];
-            let risk_lvl: number | null = null;
+            originalPrice = (originalPriceResponse.data as { price: number }).price;
+          } catch (priceErr) {
+            console.error('Original price prediction failed:', priceErr);
+            originalPrice = null;
+          }
+        }
 
-              let originalPrice: number | null = null;
-              let correctedPrice: number | null = null;
-              try {
-                const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-                  object: validatedCategory
-                });
-                regression_result = (priceResponse.data as { price: number }).price;
-                correctedPrice = regression_result;
-              } catch (priceErr) {
-                console.error('Price prediction failed:', priceErr);
-                regression_result = null;
-                correctedPrice = null;
-              }
+        const bbox = yoloPred.bbox || [0, 0, 0, 0];
+        const bbox_coordinates = {
+          x: bbox[0],
+          y: bbox[1],
+          width: bbox[2] - bbox[0],
+          height: bbox[3] - bbox[1]
+        };
 
-              if (validatedCategory !== yoloClassName) {
-                try {
-                  const originalPriceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-                    object: yoloClassName
-                  });
-                  originalPrice = (originalPriceResponse.data as { price: number }).price;
-                } catch (priceErr) {
-                  console.error('Original price prediction failed:', priceErr);
-                  originalPrice = null;
-                }
-              }
+        // Create object record
+        const { error: objectError } = await supabase
+          .from('objects')
+          .insert({
+            id: detectionId,
+            user_id,
+            scan_id: scanId,
+            image_url: imageUrl,
+            detection_source: 'YOLO',
+            category: validatedCategory,
+            confidence,
+            regression_result,
+            description,
+            suggestion: suggestionArray.join('|'),
+            risk_lvl,
+            bbox_coordinates,
+            is_validated: false
+          });
 
-            const bbox = yoloPred?.bbox || [0, 0, 0, 0];
-            const bbox_coordinates = {
+        if (objectError) {
+          throw objectError;
+        }
+
+        // Create retraining data entry
+        try {
+          await retrainingService.createRetrainingData({
+            image_url: imageUrl,
+            original_category: yoloClassName,
+            bbox_coordinates: {
               x: bbox[0],
               y: bbox[1],
               width: bbox[2] - bbox[0],
               height: bbox[3] - bbox[1]
-            };
-
-            try {
-                const enrichmentPrompt = `This image shows a ${validatedCategory} e-waste item.
-Provide a description (10-40 words), up to 3 suggestions for handling, and a damage level (0-10).
-Respond in this exact format without additional explanations:
-
-Description: <short description 10-40 words in english>
-Suggestions: <suggestion1 exactly 7-15 words in english>|<suggestion2 exactly 7-15 words in english>|<suggestion3 exactly 7-15 words in english>
-Risk Level: <number 1-10>`;
-              
-                const geminiEnrichmentRes = await axios.post<GeminiResponse>(GEMINI_API_URL, {
-                contents: [
-                  {
-                    parts: [
-                        { text: enrichmentPrompt },
-                      {
-                        inline_data: {
-                          mime_type: req.file.mimetype,
-                          data: imageBase64
-                        }
-                      }
-                    ]
-                  }
-                ],
-                generationConfig: {
-                  temperature: 0.9,
-                  topP: 0.8,
-                  topK: 40,
-                    maxOutputTokens: 2500
-                }
-              });
-              
-                const enrichmentText = geminiEnrichmentRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                
-                const descriptionMatch = enrichmentText.match(/Description:\s*(.+?)(?=\n|$)/i);
-              description = descriptionMatch ? descriptionMatch[1].trim() : null;
-              
-                const suggestionsMatch = enrichmentText.match(/Suggestions:\s*(.+?)(?=\n|$)/i);
-              if (suggestionsMatch) {
-                suggestionArray = suggestionsMatch[1].split('|').map((s: string) => s.trim());
-              }
-              
-                const riskMatch = enrichmentText.match(/Risk Level:\s*(\d+)/i);
-              if (riskMatch) {
-                const risk = parseInt(riskMatch[1]);
-                if (!isNaN(risk) && risk >= 1 && risk <= 10) {
-                  risk_lvl = risk;
-                }
-              }
-            } catch (err) {
-              const error = err as any;
-              console.error("Gemini enrichment failed:", error?.response?.data || error?.message || error);
-              description = null;
-              suggestionArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
-              risk_lvl = null;
-            }
-
-            console.log('Creating detection record...');
-            const detection = await detectionService.createDetection({
-              id: detectionId,
-              user_id,
-              scan_id: scanId,
-              image_url: imageUrl,
-              detection_source: detectionSource,
-              category: validatedCategory,
-              confidence,
-              regression_result,
-              description,
-              suggestion: suggestionArray.join(' | ') || '',
-              risk_lvl
-            });
-            console.log('Detection record created successfully:', detectionId);
-            
-            // Create retraining data entry from the detection
-            try {
-              await retrainingService.createRetrainingData({
-                image_url: imageUrl,
-                original_category: yoloClassName,
-                bbox_coordinates: {
-                  x: bbox[0],
-                  y: bbox[1],
-                  width: bbox[2] - bbox[0],
-                  height: bbox[3] - bbox[1]
-                },
-                confidence_score: confidence,
-                corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
-                  original_price: originalPrice,
-                  corrected_price: correctedPrice,
-                model_version: 'YOLOv11',
-                user_id,
-                object_id: detectionId
-              });
-              console.log('Retraining data record created for detection:', detectionId);
-            } catch (retrainErr) {
-              console.error('Failed to create retraining data:', retrainErr);
-            }
-            
-            predictionsArray.push({
-              id: detectionId,
-              category: validatedCategory,
-              confidence,
-              regression_result,
-              description,
-                suggestion: suggestionArray,
-              risk_lvl,
-              detection_source: detectionSource,
-              image_url: imageUrl
-            });
-          } catch (err) {
-            console.error('Error processing individual prediction:', {
-              error: err,
-              prediction: yoloPred
-            });
-            continue;
-          }
+            },
+            confidence_score: confidence,
+            corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
+            original_price: originalPrice,
+            corrected_price: correctedPrice,
+            model_version: 'YOLOv11',
+            user_id,
+            object_id: detectionId
+          });
+        } catch (retrainErr) {
+          console.error('Failed to create retraining data:', retrainErr);
         }
 
-          // If no predictions were processed (all were filtered out), return no e-waste message
-          if (predictionsArray.length === 0) {
-            res.status(200).json({
-              message: 'No e-waste detected'
-            });
-            return;
-          }
-
-        res.status(201).json({
-          message: 'Detection created successfully',
-          scan_id: scanId,
-          predictions: predictionsArray
+        predictionsArray.push({
+          id: detectionId,
+          category: validatedCategory,
+          confidence,
+          regression_result,
+          description,
+          suggestion: suggestionArray,
+          risk_lvl,
+          detection_source: 'YOLO',
+          image_url: imageUrl
         });
       } catch (err) {
-        console.error('Error creating scan record:', {
+        console.error('Error processing individual prediction:', {
           error: err,
-          userId: user_id
+          prediction: yoloPred
         });
-        throw err;
-        }
-      } catch (err) {
-        console.error('Error in Gemini validation:', err);
-        res.status(200).json({
-          message: 'No e-waste detected'
-        });
-        return;
+        continue;
       }
-    } catch (err) {
-      console.error('Error in detection creation process:', {
-        error: err,
-        userId: user_id,
-        fileName: req.file?.originalname
-      });
-      throw err;
     }
-  } catch (err) {
-    console.error('Error in createDetection:', {
-      error: err,
-      message: err instanceof Error ? err.message : 'Unknown error',
-      stack: err instanceof Error ? err.stack : undefined
+
+    // Update scan status
+    const { error: updateError } = await supabase
+      .from('scans')
+      .update({ status: 'completed' })
+      .eq('id', scanId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // If no predictions were processed, return no e-waste message
+    if (predictionsArray.length === 0) {
+      res.status(200).json({
+        message: 'No e-waste detected'
+      });
+      return;
+    }
+
+    res.status(200).json({
+      message: 'Detection completed successfully',
+      data: {
+        scan_id: scanId,
+        predictions: predictionsArray
+      }
     });
+  } catch (err) {
     next(err);
   }
 }

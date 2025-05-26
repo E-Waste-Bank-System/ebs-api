@@ -499,8 +499,8 @@ Category: <category name if CONFIRMED, or NONE if NOT_EWASTE>`;
 Provide a description (10-40 words), up to 3 suggestions for handling, and a damage level (0-10).
 Respond in this exact format without additional explanations:
 
-Description: <short description 10-40 words>
-Suggestions: <suggestion1 exactly 7-15 words>|<suggestion2 exactly 7-15 words>|<suggestion3 exactly 7-15 words>
+Description: <short description 10-40 words in english>
+Suggestions: <suggestion1 exactly 7-15 words in english>|<suggestion2 exactly 7-15 words in english>|<suggestion3 exactly 7-15 words in english>
 Risk Level: <number 1-10>`;
               
                 const geminiEnrichmentRes = await axios.post<GeminiResponse>(GEMINI_API_URL, {

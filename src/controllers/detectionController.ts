@@ -382,6 +382,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
       try {
         const yoloClassName = yoloPred.class_name;
         const confidence = yoloPred.confidence;
+        // Map YOLO class name to our category
         const validatedCategory = YOLO_TO_CATEGORY_MAP[yoloClassName] || yoloClassName;
         const detectionId = uuidv4();
         let regression_result = null;
@@ -405,6 +406,8 @@ export async function createDetection(req: Request, res: Response, next: NextFun
           }
         } catch (geminiErr) {
           console.error('Gemini API call failed:', geminiErr);
+          // Use default suggestions if Gemini fails
+          suggestionArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
         }
 
         // Get price prediction

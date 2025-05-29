@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import upload from '../middlewares/upload';
-import { isAdmin } from '../middlewares/role';
+import { isAdmin, isAuthenticated } from '../middlewares/role';
 import * as detectionController from '../controllers/detectionController';
 import { updateDetection } from '../controllers/detectionController';
 
@@ -211,8 +211,6 @@ const router = Router();
  *       Uploads an image for analysis, processes it with YOLO object detection model, 
  *       enriches with Gemini for description and suggestions, and estimates price with regression model.
  *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -304,8 +302,6 @@ const router = Router();
  *     summary: Get all detections with filtering and pagination
  *     description: Admin-only endpoint to retrieve all detections with various filtering options
  *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -372,8 +368,6 @@ const router = Router();
  *     summary: Get all detections for a specific user
  *     description: Retrieves all detections for a user, grouped by scan sessions
  *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: userId
@@ -401,8 +395,6 @@ const router = Router();
  *     summary: Get detection by ID
  *     description: Retrieves a single detection by its unique identifier
  *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -427,8 +419,6 @@ const router = Router();
  *     summary: Update detection details
  *     description: Updates specific fields of a detection (requires ownership verification)
  *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -483,8 +473,6 @@ const router = Router();
  *     summary: Delete detection
  *     description: Permanently removes a detection record
  *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -506,8 +494,6 @@ const router = Router();
  *     summary: Update detection image
  *     description: Replaces the image for an existing detection
  *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -544,7 +530,7 @@ const router = Router();
  *         description: Detection not found
  */
 
-router.post('/', upload.single('file'), detectionController.createDetection);
+router.post('/', isAuthenticated, upload.single('file'), detectionController.createDetection);
 router.get('/', isAdmin, detectionController.getAllDetections);
 router.get('/user/:userId', detectionController.getDetectionsByUser);
 router.get('/:id', detectionController.getDetectionById);

@@ -368,7 +368,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
     });
 
     // Call YOLO API
-    const yoloResponse = await axios.post(`${env.yoloUrl}/object`, formData, {
+    const yoloResponse = await axios.post(env.yoloUrl, formData, {
       headers: {
         ...formData.getHeaders()
       }
@@ -394,12 +394,21 @@ export async function createDetection(req: Request, res: Response, next: NextFun
 
         // Get description and suggestions from Gemini
         try {
-          const geminiResponse = await axios.post(`${env.geminiApiKey}/generate`, {
-            object: validatedCategory
+          const geminiResponse = await axios.post<GeminiResponse>('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent', {
+            contents: [{
+              parts: [{
+                text: `Describe this e-waste item in Indonesian (10-40 words): ${validatedCategory}`
+              }]
+            }]
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': env.geminiApiKey
+            }
           });
           
-          if (geminiResponse.data && (geminiResponse.data as GeminiResponse).candidates?.[0]) {
-            const text = (geminiResponse.data as GeminiResponse).candidates[0].content.parts[0].text;
+          if (geminiResponse.data?.candidates?.[0]) {
+            const text = geminiResponse.data.candidates[0].content.parts[0].text;
             const [desc, ...suggestions] = text.split('\n').filter((line: string) => line.trim());
             description = desc;
             suggestionArray = suggestions.slice(0, 3); // Take only first 3 suggestions
@@ -423,10 +432,11 @@ export async function createDetection(req: Request, res: Response, next: NextFun
           correctedPrice = null;
         }
 
+        // Only get original price if category was mapped
         if (validatedCategory !== yoloClassName) {
           try {
             const originalPriceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-              object: yoloClassName
+              object: validatedCategory
             });
             originalPrice = (originalPriceResponse.data as { price: number }).price;
           } catch (priceErr) {
@@ -434,14 +444,6 @@ export async function createDetection(req: Request, res: Response, next: NextFun
             originalPrice = null;
           }
         }
-
-        const bbox = yoloPred.bbox || [0, 0, 0, 0];
-        const bbox_coordinates = {
-          x: bbox[0],
-          y: bbox[1],
-          width: bbox[2] - bbox[0],
-          height: bbox[3] - bbox[1]
-        };
 
         // Create object record
         const { error: objectError } = await supabase
@@ -458,7 +460,6 @@ export async function createDetection(req: Request, res: Response, next: NextFun
             description,
             suggestion: suggestionArray.join('|'),
             risk_lvl,
-            bbox_coordinates,
             is_validated: false
           });
 
@@ -466,28 +467,25 @@ export async function createDetection(req: Request, res: Response, next: NextFun
           throw objectError;
         }
 
-        // Create retraining data entry
-        try {
-          await retrainingService.createRetrainingData({
-            image_url: imageUrl,
-            original_category: yoloClassName,
-            bbox_coordinates: {
-              x: bbox[0],
-              y: bbox[1],
-              width: bbox[2] - bbox[0],
-              height: bbox[3] - bbox[1]
-            },
-            confidence_score: confidence,
-            corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
-            original_price: originalPrice,
-            corrected_price: correctedPrice,
-            model_version: 'YOLOv11',
-            user_id,
-            object_id: detectionId
-          });
-        } catch (retrainErr) {
-          console.error('Failed to create retraining data:', retrainErr);
-        }
+        // Create retraining data entry with bbox coordinates
+        const bbox = yoloPred.bbox || [0, 0, 0, 0];
+        await retrainingService.createRetrainingData({
+          image_url: imageUrl,
+          original_category: yoloClassName,
+          bbox_coordinates: {
+            x: bbox[0],
+            y: bbox[1],
+            width: bbox[2] - bbox[0],
+            height: bbox[3] - bbox[1]
+          },
+          confidence_score: confidence,
+          corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
+          original_price: originalPrice,
+          corrected_price: correctedPrice,
+          model_version: 'YOLOv11',
+          user_id,
+          object_id: detectionId
+        });
 
         predictionsArray.push({
           id: detectionId,
@@ -498,8 +496,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
           suggestion: suggestionArray,
           risk_lvl,
           detection_source: 'YOLO',
-          image_url: imageUrl,
-          bbox_coordinates
+          image_url: imageUrl
         });
       } catch (err) {
         console.error('Error processing individual prediction:', {
@@ -513,7 +510,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
     // Update scan status
     const { error: updateError } = await supabase
       .from('scans')
-      .update({ status: 'completed' })
+      .update({ status: 'pending' })
       .eq('id', scanId);
 
     if (updateError) {

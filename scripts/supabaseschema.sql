@@ -46,7 +46,6 @@ create table public.objects (
   description text,               -- new: max 40 words (enforced in backend)
   suggestion text,                -- new: up to 3 points, joined by ' | ' (or use text[] for array)
   risk_lvl integer check (risk_lvl >= 1 and risk_lvl <= 10),  -- new: 1-10
-  bbox_coordinates jsonb,         -- new: stores bounding box coordinates
   is_validated boolean not null default false,  -- new: tracks validation status
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now())

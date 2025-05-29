@@ -377,7 +377,7 @@ export async function createDetection(req: Request, res: Response, next: NextFun
     const yoloPredictions = (yoloResponse.data as { predictions: any[] }).predictions;
     const predictionsArray = [];
 
-    // Process each prediction
+    // Process each prediction independently
     for (const yoloPred of yoloPredictions) {
       try {
         const yoloClassName = yoloPred.class_name;
@@ -498,7 +498,8 @@ export async function createDetection(req: Request, res: Response, next: NextFun
           suggestion: suggestionArray,
           risk_lvl,
           detection_source: 'YOLO',
-          image_url: imageUrl
+          image_url: imageUrl,
+          bbox_coordinates
         });
       } catch (err) {
         console.error('Error processing individual prediction:', {

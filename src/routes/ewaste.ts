@@ -1,106 +1,88 @@
-import { Router } from 'express';
-import { getAllEwaste, createEwaste } from '../controllers/ewasteController';
-import { isAdmin } from '../middlewares/role';
+import express from 'express';
+import { isAdmin } from '../middleware/auth';
+import {
+  getEWaste,
+  getEWasteList,
+  createEWaste,
+  updateEWaste,
+  deleteEWaste,
+  validateEWaste,
+  getEWasteByCategory,
+  getEWasteByUser
+} from '../controllers/ewasteController';
 
-const router = Router();
-
-/**
- * @swagger
- * tags:
- *   name: Ewaste
- *   description: E-waste inventory management system
- */
-
-/**
- * @swagger
- * components:
- *   schemas:
- *     Ewaste:
- *       type: object
- *       required:
- *         - id
- *         - user_id
- *         - name
- *         - category
- *         - quantity
- *       properties:
- *         id:
- *           type: string
- *           format: uuid
- *           description: Unique identifier for the e-waste item
- *         user_id:
- *           type: string
- *           format: uuid
- *           description: ID of the user who submitted the e-waste
- *         detection_id:
- *           type: string
- *           format: uuid
- *           nullable: true
- *           description: ID of the detection this e-waste is based on (if applicable)
- *         name:
- *           type: string
- *           description: Name or description of the e-waste item
- *         category:
- *           type: string
- *           description: Category of the e-waste (e.g., Keyboard, Monitor, Battery)
- *         quantity:
- *           type: integer
- *           minimum: 1
- *           description: Quantity of the e-waste item
- *         estimated_price:
- *           type: number
- *           format: float
- *           nullable: true
- *           minimum: 0
- *           description: Estimated price of the e-waste item in IDR
- *         image_url:
- *           type: string
- *           format: uri
- *           nullable: true
- *           description: URL of the e-waste image
- *         created_at:
- *           type: string
- *           format: date-time
- *           description: Timestamp when the e-waste record was created
- *       example:
- *         id: "550e8400-e29b-41d4-a716-446655440000"
- *         user_id: "d0ac0ecb-b4d7-4d81-bcd7-c0bcec391527"
- *         detection_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
- *         name: "Dell Keyboard Model KB216"
- *         category: "Keyboard"
- *         quantity: 2
- *         estimated_price: 75000
- *         image_url: "https://storage.googleapis.com/ebs-bucket/detection_123456.jpg"
- *         created_at: "2023-06-01T12:00:00Z"
- */
+const router = express.Router();
 
 /**
  * @swagger
- * /ewaste:
+ * /api/ewaste/{id}:
  *   get:
- *     summary: Get all e-waste items
- *     description: Admin-only endpoint to retrieve all e-waste items in the system
- *     tags: [Ewaste]
- *     security: [ { bearerAuth: [] } ]
+ *     summary: Get e-waste details by ID
+ *     tags: [E-Waste]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
- *         description: List of e-waste items successfully retrieved
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/Ewaste'
- *       401:
- *         description: Unauthorized - valid token required
- *       403:
- *         description: Forbidden - admin access required
- * 
+ *         description: E-waste details retrieved successfully
+ *       404:
+ *         description: E-waste not found
+ */
+router.get('/:id', getEWaste);
+
+/**
+ * @swagger
+ * /api/ewaste:
+ *   get:
+ *     summary: Get list of e-waste with filters
+ *     tags: [E-Waste]
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, approved, rejected]
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *     responses:
+ *       200:
+ *         description: List of e-waste retrieved successfully
+ */
+router.get('/', getEWasteList);
+
+/**
+ * @swagger
+ * /api/ewaste:
  *   post:
- *     summary: Create a new e-waste record
- *     description: Admin-only endpoint to manually add an e-waste item to the inventory
- *     tags: [Ewaste]
- *     security: [ { bearerAuth: [] } ]
+ *     summary: Create new e-waste entry
+ *     tags: [E-Waste]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -108,59 +90,154 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
- *               - user_id
- *               - name
  *               - category
- *               - quantity
+ *               - risk_level
  *             properties:
- *               detection_id:
- *                 type: string
- *                 format: uuid
- *                 description: ID of the detection this e-waste is based on (optional)
- *               user_id:
- *                 type: string
- *                 format: uuid
- *                 description: ID of the user submitting the e-waste
- *               name:
- *                 type: string
- *                 description: Name or description of the e-waste item
- *                 example: "HP Laptop Model 15-bs013dx"
  *               category:
  *                 type: string
- *                 description: Category of the e-waste
- *                 example: "Laptop"
- *               quantity:
- *                 type: integer
- *                 minimum: 1
- *                 description: Quantity of the e-waste item
- *                 example: 1
- *               estimated_price:
+ *               risk_level:
  *                 type: number
- *                 format: float
- *                 minimum: 0
- *                 description: Estimated price of the e-waste item in IDR
- *                 example: 1500000
- *               image_url:
+ *               description:
  *                 type: string
- *                 format: uri
- *                 description: URL of the e-waste image (optional)
- *                 example: "https://storage.googleapis.com/ebs-bucket/ewaste_123456.jpg"
  *     responses:
  *       201:
- *         description: E-waste record created successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Ewaste'
- *       400:
- *         description: Bad request - missing required fields or invalid data
+ *         description: E-waste created successfully
  *       401:
- *         description: Unauthorized - valid token required
- *       403:
- *         description: Forbidden - admin access required
+ *         description: Unauthorized
  */
+router.post('/', createEWaste);
 
-router.get('/', isAdmin, getAllEwaste);
-router.post('/', isAdmin, createEwaste);
+/**
+ * @swagger
+ * /api/ewaste/{id}:
+ *   put:
+ *     summary: Update e-waste entry
+ *     tags: [E-Waste]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               category:
+ *                 type: string
+ *               risk_level:
+ *                 type: number
+ *               description:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: E-waste updated successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: E-waste not found
+ */
+router.put('/:id', updateEWaste);
+
+/**
+ * @swagger
+ * /api/ewaste/{id}:
+ *   delete:
+ *     summary: Delete e-waste entry
+ *     tags: [E-Waste]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       204:
+ *         description: E-waste deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: E-waste not found
+ */
+router.delete('/:id', deleteEWaste);
+
+/**
+ * @swagger
+ * /api/ewaste/{id}/validate:
+ *   post:
+ *     summary: Validate e-waste entry
+ *     tags: [E-Waste]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [approved, rejected]
+ *     responses:
+ *       200:
+ *         description: E-waste validated successfully
+ *       400:
+ *         description: Invalid status
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: E-waste not found
+ */
+router.post('/:id/validate', isAdmin, validateEWaste);
+
+/**
+ * @swagger
+ * /api/ewaste/category/{category}:
+ *   get:
+ *     summary: Get e-waste by category
+ *     tags: [E-Waste]
+ *     parameters:
+ *       - in: path
+ *         name: category
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of e-waste by category retrieved successfully
+ */
+router.get('/category/:category', getEWasteByCategory);
+
+/**
+ * @swagger
+ * /api/ewaste/user:
+ *   get:
+ *     summary: Get e-waste by current user
+ *     tags: [E-Waste]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of e-waste by user retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/user', getEWasteByUser);
 
 export default router; 

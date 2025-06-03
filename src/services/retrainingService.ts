@@ -1,5 +1,5 @@
 import supabase from '../utils/supabase';
-import { RetrainingData } from '../models/retrainingModel';
+import { RetrainingData } from '../models/retraining';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function createRetrainingData(data: Omit<RetrainingData, 'id' | 'created_at' | 'is_verified'>) {

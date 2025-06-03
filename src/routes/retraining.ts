@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { isAuthenticated } from '../middlewares/role';
 import * as retrainingController from '../controllers/retrainingController';
+import validateQuery from '../middlewares/validateQuery';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -8,7 +10,7 @@ const router = Router();
  * @swagger
  * tags:
  *   name: Retraining
- *   description: Model retraining data management
+ *   description: Model retraining data management and validation
  */
 
 /**
@@ -37,74 +39,141 @@ const router = Router();
  *           description: Height of the bounding box
  *     RetrainingData:
  *       type: object
- *       description: |
- *         Model retraining data entry. This system captures prediction data and allows for human verification/correction.
- *         It automatically integrates with the validation system - any user feedback from validations will update 
- *         the corresponding retraining entries, ensuring a consistent feedback loop for model improvement.
  *       required:
  *         - id
+ *         - user_id
+ *         - object_id
  *         - image_url
  *         - original_category
  *         - bbox_coordinates
  *         - confidence_score
+ *         - corrected_category
+ *         - corrected_price
  *         - is_verified
  *         - model_version
- *         - user_id
- *         - object_id
  *       properties:
  *         id:
  *           type: string
  *           format: uuid
  *           description: Unique identifier for the retraining data
+ *         user_id:
+ *           type: string
+ *           format: uuid
+ *           description: ID of the user who created the entry
+ *         object_id:
+ *           type: string
+ *           format: uuid
+ *           description: ID of the detected object
  *         image_url:
  *           type: string
- *           description: URL of the image
+ *           format: uri
+ *           description: URL of the image in storage
  *         original_category:
  *           type: string
  *           description: Original category predicted by the model
  *         bbox_coordinates:
- *           $ref: '#/components/schemas/BboxCoordinates'
+ *           type: object
+ *           description: Bounding box coordinates of the detection
+ *           properties:
+ *             x:
+ *               type: number
+ *               format: float
+ *             y:
+ *               type: number
+ *               format: float
+ *             width:
+ *               type: number
+ *               format: float
+ *             height:
+ *               type: number
+ *               format: float
  *         confidence_score:
  *           type: number
  *           format: float
+ *           minimum: 0
+ *           maximum: 1
  *           description: Confidence score of the original prediction
  *         corrected_category:
  *           type: string
- *           nullable: true
- *           description: Corrected category by human verification (automatically updated from validations)
+ *           description: Corrected category after validation
+ *         corrected_price:
+ *           type: number
+ *           format: float
+ *           description: Corrected price after validation
  *         is_verified:
  *           type: boolean
- *           description: Whether this data point has been verified by a human
+ *           description: Whether the entry has been verified
+ *         verified_by:
+ *           type: string
+ *           format: uuid
+ *           nullable: true
+ *           description: ID of the user who verified the entry
  *         model_version:
  *           type: string
- *           description: Version of the model that made the prediction
- *         user_id:
- *           type: string
- *           format: uuid
- *           description: ID of the user associated with this data
- *         object_id:
- *           type: string
- *           format: uuid
- *           description: ID of the related detection (required for linking validations and retraining data)
+ *           description: Version of the model used for detection
  *         created_at:
  *           type: string
  *           format: date-time
- *           description: Timestamp when the data was created
+ *           description: Timestamp when the entry was created
  *         updated_at:
  *           type: string
  *           format: date-time
- *           nullable: true
- *           description: Timestamp when the data was last updated
+ *           description: Timestamp when the entry was last updated
+ *       example:
+ *         id: "550e8400-e29b-41d4-a716-446655440000"
+ *         user_id: "d0ac0ecb-b4d7-4d81-bcd7-c0bcec391527"
+ *         object_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+ *         image_url: "https://storage.googleapis.com/ebs-bucket/retraining_123456.jpg"
+ *         original_category: "Keyboard"
+ *         bbox_coordinates: {
+ *           x: 0.1,
+ *           y: 0.2,
+ *           width: 0.3,
+ *           height: 0.4
+ *         }
+ *         confidence_score: 0.95
+ *         corrected_category: "Mechanical Keyboard"
+ *         corrected_price: 75000
+ *         is_verified: true
+ *         verified_by: "d0ac0ecb-b4d7-4d81-bcd7-c0bcec391527"
+ *         model_version: "v1.0.0"
+ *         created_at: "2023-06-01T12:00:00Z"
+ *         updated_at: "2023-06-01T12:30:00Z"
  */
+
+const retrainingSchema = z.object({
+  image_url: z.string().url(),
+  original_category: z.string().min(1),
+  bbox_coordinates: z.object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+  }),
+  confidence_score: z.number().min(0).max(1),
+  model_version: z.string().min(1),
+  user_id: z.string().uuid(),
+  object_id: z.string().uuid(),
+});
+
+const querySchema = z.object({
+  page: z.string().regex(/^\d+$/).transform(Number).optional(),
+  limit: z.string().regex(/^\d+$/).transform(Number).optional(),
+  is_verified: z.string().transform(val => val === 'true').optional(),
+  model_version: z.string().optional(),
+  confidence_below: z.string().transform(Number).optional(),
+  category: z.string().optional(),
+});
 
 /**
  * @swagger
  * /retraining:
  *   post:
  *     summary: Create a new retraining data entry
- *     description: Add a new entry to the retraining dataset
+ *     description: Create a new entry for model retraining data
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -112,71 +181,110 @@ const router = Router();
  *           schema:
  *             type: object
  *             required:
+ *               - object_id
  *               - image_url
  *               - original_category
  *               - bbox_coordinates
  *               - confidence_score
+ *               - corrected_category
+ *               - corrected_price
  *               - model_version
- *               - user_id
- *               - object_id
  *             properties:
+ *               object_id:
+ *                 type: string
+ *                 format: uuid
+ *                 description: ID of the detected object
  *               image_url:
  *                 type: string
- *                 description: URL of the image
+ *                 format: uri
+ *                 description: URL of the image in storage
  *               original_category:
  *                 type: string
  *                 description: Original category predicted by the model
  *               bbox_coordinates:
- *                 $ref: '#/components/schemas/BboxCoordinates'
+ *                 type: object
+ *                 description: Bounding box coordinates of the detection
+ *                 properties:
+ *                   x:
+ *                     type: number
+ *                     format: float
+ *                   y:
+ *                     type: number
+ *                     format: float
+ *                   width:
+ *                     type: number
+ *                     format: float
+ *                   height:
+ *                     type: number
+ *                     format: float
  *               confidence_score:
  *                 type: number
  *                 format: float
+ *                 minimum: 0
+ *                 maximum: 1
  *                 description: Confidence score of the original prediction
+ *               corrected_category:
+ *                 type: string
+ *                 description: Corrected category after validation
+ *               corrected_price:
+ *                 type: number
+ *                 format: float
+ *                 description: Corrected price after validation
  *               model_version:
  *                 type: string
- *                 description: Version of the model that made the prediction
- *               user_id:
- *                 type: string
- *                 format: uuid
- *                 description: ID of the user associated with this data
- *               object_id:
- *                 type: string
- *                 format: uuid
- *                 description: ID of the related detection (required for linking validations and retraining data)
+ *                 description: Version of the model used for detection
  *     responses:
  *       201:
  *         description: Retraining data entry created successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/RetrainingData'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/RetrainingData'
+ *                 message:
+ *                   type: string
  *       400:
- *         description: Bad request - missing required fields
+ *         description: Invalid request data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', isAuthenticated, retrainingController.createRetrainingEntry);
+router.post('/', isAuthenticated, validateQuery(retrainingSchema), retrainingController.createRetrainingEntry);
 
 /**
  * @swagger
  * /retraining:
  *   get:
- *     summary: Get all retraining data with pagination and filters
- *     description: Retrieve all retraining data entries with optional filtering
+ *     summary: Get retraining data entries
+ *     description: Retrieve paginated list of retraining data entries
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
- *           default: 1
  *         description: Page number
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 10
  *         description: Number of items per page
  *       - in: query
  *         name: is_verified
@@ -188,16 +296,6 @@ router.post('/', isAuthenticated, retrainingController.createRetrainingEntry);
  *         schema:
  *           type: string
  *         description: Filter by model version
- *       - in: query
- *         name: confidence_below
- *         schema:
- *           type: number
- *         description: Filter by confidence score below this value
- *       - in: query
- *         name: category
- *         schema:
- *           type: string
- *         description: Filter by original category
  *     responses:
  *       200:
  *         description: List of retraining data entries
@@ -212,20 +310,27 @@ router.post('/', isAuthenticated, retrainingController.createRetrainingEntry);
  *                     $ref: '#/components/schemas/RetrainingData'
  *                 total:
  *                   type: integer
- *                   description: Total number of items
- *                 current_page:
+ *                   description: Total number of entries
+ *                 page:
  *                   type: integer
  *                   description: Current page number
- *                 last_page:
- *                   type: integer
- *                   description: Last page number
- *                 per_page:
+ *                 limit:
  *                   type: integer
  *                   description: Number of items per page
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', isAuthenticated, retrainingController.getAllRetrainingData);
+router.get('/', isAuthenticated, validateQuery(querySchema), retrainingController.getAllRetrainingData);
 
 /**
  * @swagger
@@ -234,7 +339,8 @@ router.get('/', isAuthenticated, retrainingController.getAllRetrainingData);
  *     summary: Get unverified samples for review
  *     description: Retrieve samples that need human verification, sorted by lowest confidence first
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: limit
@@ -252,7 +358,17 @@ router.get('/', isAuthenticated, retrainingController.getAllRetrainingData);
  *               items:
  *                 $ref: '#/components/schemas/RetrainingData'
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/unverified/samples', isAuthenticated, retrainingController.getUnverifiedSamples);
 
@@ -263,7 +379,8 @@ router.get('/unverified/samples', isAuthenticated, retrainingController.getUnver
  *     summary: Export verified data for model retraining
  *     description: Export all verified data for use in model retraining
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Verified data for retraining
@@ -274,7 +391,17 @@ router.get('/unverified/samples', isAuthenticated, retrainingController.getUnver
  *               items:
  *                 $ref: '#/components/schemas/RetrainingData'
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/export/data', isAuthenticated, retrainingController.exportVerifiedData);
 
@@ -282,10 +409,11 @@ router.get('/export/data', isAuthenticated, retrainingController.exportVerifiedD
  * @swagger
  * /retraining/{id}:
  *   get:
- *     summary: Get a retraining data entry by ID
- *     description: Retrieve a specific retraining data entry
+ *     summary: Get retraining data entry by ID
+ *     description: Retrieve a specific retraining data entry by its ID
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -293,18 +421,35 @@ router.get('/export/data', isAuthenticated, retrainingController.exportVerifiedD
  *         schema:
  *           type: string
  *           format: uuid
- *         description: ID of the retraining data entry
+ *         description: Retraining data entry ID
  *     responses:
  *       200:
- *         description: Retraining data entry
+ *         description: Retraining data entry details
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/RetrainingData'
- *       404:
- *         description: Retraining data not found
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/RetrainingData'
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Entry not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/:id', isAuthenticated, retrainingController.getRetrainingDataById);
 
@@ -315,7 +460,8 @@ router.get('/:id', isAuthenticated, retrainingController.getRetrainingDataById);
  *     summary: Get retraining data by object ID
  *     description: Retrieve retraining data for a specific object/detection
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: object_id
@@ -330,11 +476,28 @@ router.get('/:id', isAuthenticated, retrainingController.getRetrainingDataById);
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/RetrainingData'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/RetrainingData'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: No retraining data found for this object
- *       401:
- *         description: Unauthorized - valid token required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/object/:object_id', isAuthenticated, retrainingController.getRetrainingDataByObjectId);
 
@@ -345,7 +508,8 @@ router.get('/object/:object_id', isAuthenticated, retrainingController.getRetrai
  *     summary: Update a retraining data entry
  *     description: Update a specific retraining data entry
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -375,22 +539,48 @@ router.get('/object/:object_id', isAuthenticated, retrainingController.getRetrai
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/RetrainingData'
- *       404:
- *         description: Retraining data not found
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/RetrainingData'
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid update data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Entry not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', isAuthenticated, retrainingController.updateRetrainingData);
+router.put('/:id', isAuthenticated, validateQuery(retrainingSchema), retrainingController.updateRetrainingData);
 
 /**
  * @swagger
  * /retraining/{id}/verify:
  *   post:
  *     summary: Verify a retraining data entry
- *     description: Mark a retraining data entry as verified and provide the corrected category
+ *     description: Mark a retraining data entry as verified
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -398,32 +588,37 @@ router.put('/:id', isAuthenticated, retrainingController.updateRetrainingData);
  *         schema:
  *           type: string
  *           format: uuid
- *         description: ID of the retraining data entry
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - corrected_category
- *             properties:
- *               corrected_category:
- *                 type: string
- *                 description: The corrected category for this data
+ *         description: Retraining data entry ID
  *     responses:
  *       200:
- *         description: Retraining data verified successfully
+ *         description: Entry verified successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/RetrainingData'
- *       400:
- *         description: Bad request - corrected category is required
- *       404:
- *         description: Retraining data not found
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/RetrainingData'
+ *                 message:
+ *                   type: string
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Entry not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post('/:id/verify', isAuthenticated, retrainingController.verifyRetrainingData);
 
@@ -434,7 +629,8 @@ router.post('/:id/verify', isAuthenticated, retrainingController.verifyRetrainin
  *     summary: Delete a retraining data entry
  *     description: Delete a specific retraining data entry
  *     tags: [Retraining]
- *     security: [ { bearerAuth: [] } ]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -446,10 +642,24 @@ router.post('/:id/verify', isAuthenticated, retrainingController.verifyRetrainin
  *     responses:
  *       204:
  *         description: Retraining data deleted successfully
- *       404:
- *         description: Retraining data not found
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Entry not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete('/:id', isAuthenticated, retrainingController.deleteRetrainingData);
 

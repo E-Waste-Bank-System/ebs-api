@@ -15,130 +15,11 @@ import articleRoutes from './routes/article';
 import fs from 'fs';
 import path from 'path';
 import detectionRoutes from './routes/detection';
-import validationRoutes from './routes/validation';
 import retrainingRoutes from './routes/retraining';
-import { getStatistics } from './controllers/statisticsController';
-import userRoutes from './routes/user';
-import upload from './middlewares/upload';
-import { uploadFile } from './controllers/uploadController';
-import ewasteRoutes from './routes/ewaste';
-import scanRoutes from './routes/scan';
-
-/**
- * @swagger
- * tags:
- *   name: Statistics
- *   description: System-wide analytics and statistics
- */
-
-/**
- * @swagger
- * components:
- *   schemas:
- *     Statistics:
- *       type: object
- *       properties:
- *         totalDetections:
- *           type: integer
- *           description: Total number of detections in the system
- *         totalValue:
- *           type: number
- *           format: float
- *           description: Total estimated value of all detected e-waste (in IDR)
- *         topCategories:
- *           type: array
- *           description: Top e-waste categories by frequency
- *           items:
- *             type: object
- *             properties:
- *               category:
- *                 type: string
- *                 description: E-waste category name
- *               count:
- *                 type: integer
- *                 description: Number of occurrences
- *       example:
- *         totalDetections: 247
- *         totalValue: 18650000
- *         topCategories: [
- *           { category: "Keyboard", count: 45 },
- *           { category: "Monitor", count: 32 },
- *           { category: "Laptop", count: 28 },
- *           { category: "Phone", count: 24 },
- *           { category: "Battery", count: 21 }
- *         ]
- */
-
-/**
- * @swagger
- * /stats:
- *   get:
- *     summary: Get system statistics
- *     description: Retrieves aggregated statistics about detections, values, and categories
- *     tags: [Statistics]
- *     responses:
- *       200:
- *         description: Statistics retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Statistics'
- *       500:
- *         description: Server error while retrieving statistics
- */
-
-/**
- * @swagger
- * tags:
- *   name: Uploads
- *   description: General file upload utility
- */
-
-/**
- * @swagger
- * /upload:
- *   post:
- *     summary: Upload an image file
- *     description: General-purpose image upload endpoint
- *     tags: [Uploads]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - image
- *             properties:
- *               image:
- *                 type: string
- *                 format: binary
- *                 description: Image file to upload
- *     responses:
- *       201:
- *         description: Image uploaded successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 url:
- *                   type: string
- *                   format: uri
- *                   description: URL of the uploaded image
- *       400:
- *         description: Bad request - image file is required
- *       401:
- *         description: Unauthorized - valid token required
- *       500:
- *         description: Server error during upload process
- */
+import statsRoutes from './routes/stats';
 
 const app = express();
 
-// Trust proxy for correct client IP detection (needed for Cloud Run, rate limiting, etc.)
 app.set('trust proxy', 1);
 
 // Security
@@ -191,7 +72,7 @@ function generateSwaggerSpec() {
       info: {
         title: 'E-Waste Bank API',
         version: '1.0.0',
-        description: 'API for E-Waste Bank System. Features include authentication, AI detection of e-waste, article management, validation feedback, statistics, and e-waste management.'
+        description: 'API for E-Waste Bank System. Features include authentication, AI detection of e-waste, article management, and retraining data management.'
       },
       servers: [
         { url: 'http://localhost:8080/api', description: 'Local development server' },
@@ -212,12 +93,7 @@ function generateSwaggerSpec() {
         { name: 'Auth', description: 'Authentication endpoints' },
         { name: 'Detections', description: 'E-waste detection and analysis' },
         { name: 'Articles', description: 'Article management for educational content' },
-        { name: 'Validations', description: 'User feedback on detection accuracy' },
-        { name: 'Retraining', description: 'Model retraining data management' },
-        { name: 'Ewaste', description: 'E-waste inventory management' },
-        { name: 'Admins', description: 'Administrator user management' },
-        { name: 'Statistics', description: 'System-wide statistics and analytics' },
-        { name: 'Uploads', description: 'File upload utilities' }
+        { name: 'Retraining', description: 'Model retraining data management' }
       ]
     },
     apis: [
@@ -235,13 +111,8 @@ app.use('/api/docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 app.use('/api/auth', authRoutes);
 app.use('/api/articles', articleRoutes);
 app.use('/api/detections', detectionRoutes);
-app.use('/api/validations', validationRoutes);
 app.use('/api/retraining', retrainingRoutes);
-app.use('/api/stats', getStatistics);
-app.use('/api/admins', userRoutes);
-app.post('/api/upload', upload.single('image'), uploadFile);
-app.use('/api/ewaste', ewasteRoutes);
-app.use('/api/scans', scanRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Error handling
 app.use(errorHandler);

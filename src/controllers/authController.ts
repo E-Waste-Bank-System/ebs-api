@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import supabase from '../utils/supabase';
-import { isAdminUser, getUserById } from '../services/authService';
+import { isAdminUser } from '../services/authService';
 import { signToken } from '../utils/token';
 
 export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {

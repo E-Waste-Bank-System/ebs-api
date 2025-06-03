@@ -9,533 +9,324 @@ import axios from 'axios';
 import { AuthRequest } from '../middlewares/auth';
 import FormData from 'form-data';
 import supabase from '../utils/supabase';
+import logger from '../utils/logger';
+import { z } from 'zod';
+import { Database } from '../types/supabase';
+import { ValidationAction } from '../models/validation';
 
-// Utility function to properly parse suggestion fragments into complete sentences
-function parseSuggestionFragments(suggestionString: string): string[] {
-  if (!suggestionString) return [];
-  
-  // Split by pipe separator
-  const fragments = suggestionString.split('|').map(s => s.trim()).filter(s => s);
-  
-  if (fragments.length === 0) return [];
-  
-  const suggestions: string[] = [];
-  let currentSuggestion = '';
-  
-  for (let i = 0; i < fragments.length; i++) {
-    const fragment = fragments[i];
-    
-    // If current suggestion is empty, start a new one
-    if (!currentSuggestion) {
-      currentSuggestion = fragment;
-    } else {
-      // Check if this fragment should be combined with the previous one
-      const shouldCombine = (
-        // Previous fragment doesn't end with sentence-ending punctuation
-        !/[.!?]$/.test(currentSuggestion.trim()) ||
-        // Current fragment doesn't start with capital letter (likely a continuation)
-        !/^[A-Z]/.test(fragment.trim()) ||
-        // Previous fragment ends with comma, suggesting continuation
-        /,$/.test(currentSuggestion.trim()) ||
-        // Previous fragment is very short (likely incomplete)
-        currentSuggestion.trim().length < 10
-      );
-      
-      if (shouldCombine) {
-        // Combine with previous fragment
-        const needsSpace = !currentSuggestion.endsWith(' ') && !fragment.startsWith(' ');
-        const needsComma = /^[a-z]/.test(fragment.trim()) && !/[.!?,:;]$/.test(currentSuggestion.trim());
-        
-        if (needsComma && needsSpace) {
-          currentSuggestion += ', ' + fragment;
-        } else if (needsSpace) {
-          currentSuggestion += ' ' + fragment;
-        } else {
-          currentSuggestion += fragment;
-        }
-      } else {
-        // Finish current suggestion and start a new one
-        suggestions.push(currentSuggestion.trim());
-        currentSuggestion = fragment;
-      }
-    }
-  }
-  
-  // Don't forget to add the last suggestion
-  if (currentSuggestion.trim()) {
-    suggestions.push(currentSuggestion.trim());
-  }
-  
-  return suggestions;
+type Detection = Database['public']['Tables']['objects']['Row'];
+type Scan = Database['public']['Tables']['scans']['Row'];
+
+interface DetectionWithScan extends Detection {
+  scans: Scan;
 }
 
-// Types for database entities
-interface Scan {
+// Define the ScanWithObjects type
+interface ScanWithObjects {
   id: string;
   user_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: string;
   created_at: string;
   updated_at: string;
+  objects: any[];
 }
 
-interface Object {
+// Define the parseSuggestionFragments function
+function parseSuggestionFragments(suggestion: string): string[] {
+  return suggestion.split('|').filter(Boolean);
+}
+
+// Validation schemas
+const detectionQuerySchema = z.object({
+  page: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+  limit: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+  category: z.string().optional(),
+  is_validated: z.string().optional().transform(val => val === 'true')
+});
+
+const validationSchema = z.object({
+  category: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  validated_by: z.string().uuid()
+});
+
+interface AIPrediction {
   id: string;
-  user_id: string;
-  scan_id: string;
-  image_url: string;
-  detection_source: string;
   category: string;
   confidence: number;
-  regression_result: number | null;
-  description: string | null;
-  suggestion: string | null;
+  regression_result: number;
+  description: string;
+  bbox: number[];
+  suggestion: string[];
   risk_lvl: number;
-  bbox_coordinates: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  } | null;
-  is_validated: boolean;
-  created_at: string;
-  updated_at: string;
+  detection_source: string;
 }
 
-interface ScanWithObjects extends Scan {
-  objects: Object[];
+interface AIResponse {
+  predictions: AIPrediction[];
 }
 
-// Interface for Gemini API response
-interface GeminiResponse {
-  candidates: Array<{
-    content: {
-      parts: Array<{
-        text: string;
-      }>;
-    };
-  }>;
-}
-
-// Database categories - consolidated categories for database storage
-const CLASS_NAMES = [
-  "AC",
-  "Adaptor /Kilo",
-  "Aki Motor",
-  "Alat Tensi",
-  "Alat Tes Vol",
-  "Ant Miner Case",
-  "Ant Miner Hashboard",
-  "Antena",
-  "Bantal Pemanas",
-  "Baterai Laptop",
-  "Batok Charger",
-  "Blender",
-  "Box Kabel",
-  "Box Speaker Kecil",
-  "Camera",
-  "Catokan",
-  "CCTV",
-  "CD",
-  "Charger Laptop",
-  "Cooler",
-  "DVD Player",
-  "DVD ROM",
-  "Flashdisk",
-  "Game Boy",
-  "Hair Dryer",
-  "Handphone",
-  "Hardisk",
-  "Homic Wireless",
-  "Jam Digital",
-  "Jam Dinding",
-  "Jam Tangan",
-  "Kabel /Kilo",
-  "Kabel Sambungan",
-  "Keyboard",
-  "Kipas",
-  "Komponen CPU",
-  "Komponen Kulkas",
-  "Kompor Listrik",
-  "Lampu",
-  "Laptop",
-  "Magicom",
-  "Mesin Cuci",
-  "Mesin Facial",
-  "Mesin Fax",
-  "Mesin Jahit",
-  "Mesin Kasir",
-  "Mesin Pijat",
-  "Microfon",
-  "Microwave",
-  "Mixer",
-  "Modem",
-  "Monitor",
-  "Motherboard",
-  "Mouse",
-  "Multi Tester",
-  "Neon Box",
-  "Notebook Cooler",
-  "Oven",
-  "Panel Surya",
-  "Pompa Air",
-  "Power Bank",
-  "Power Supply",
-  "Printer",
-  "PS2",
-  "Radio",
-  "Raket Nyamuk",
-  "Remot",
-  "Router",
-  "Saklar Lampu",
-  "Senter",
-  "Seterika",
-  "Solder",
-  "Sound Blaster",
-  "Speaker",
-  "Stabilizer",
-  "Stik Ps",
-  "Stop Kontak",
-  "Tabung Debu",
-  "Teko Listrik",
-  "Telefon",
-  "Timbangan Badan",
-  "Tinta",
-  "TV",
-  "Ultrasonic",
-  "UPS",
-  "Vacum Cleaner",
-  "VGA",
-  "Walkie Talkie",
-  "Wireless Charger"
-];
-
-// Map YOLO class names to our consolidated database categories
-const YOLO_TO_CATEGORY_MAP: { [key: string]: string } = {
-  // Computing Devices
-  'Computer-Keyboard': 'Keyboard',
-  'Electronic-Keyboard': 'Keyboard',
-  'Computer-Mouse': 'Mouse',
-  'Desktop-PC': 'Komponen CPU',
-  'Server': 'Komponen CPU',
-  'PCB': 'Komponen CPU',
-  'HDD': 'Hardisk',
-  'SSD': 'Hardisk',
-  'USB-Flash-Drive': 'Flashdisk',
-  'Laptop': 'Laptop',
-
-  // Display Devices
-  'Flat-Panel-Monitor': 'Monitor',
-  'CRT-Monitor': 'Monitor',
-  'Digital-Oscilloscope': 'Monitor',
-  'Patient-Monitoring-System': 'Monitor',
-  'Projector': 'Monitor',
-  'Flat-Panel-TV': 'TV',
-  'CRT-TV': 'TV',
-  'TV-Remote-Control': 'Remot',
-  
-  // Mobile Devices
-  'Smartphone': 'Handphone',
-  'Bar-Phone': 'Handphone',
-  'Smart-Watch': 'Jam Tangan',
-  'Tablet': 'Handphone',
-  'Camera': 'Camera',
-  'PlayStation-5': 'PS2',
-  'Xbox-Series-X': 'PS2',
-  
-  // Audio Devices
-  'Speaker': 'Speaker',
-  'Headphone': 'Speaker',
-  'Music-Player': 'Speaker',
-  'Electric-Guitar': 'Speaker',
-  
-  // Power Devices
-  'Power-Adapter': 'Adaptor /Kilo',
-  'Battery': 'Baterai Laptop',
-  
-  // Kitchen Devices
-  'Microwave': 'Microwave',
-  'Coffee-Machine': 'Oven',
-  'Oven': 'Oven',
-  'Stove': 'Kompor Listrik',
-  'Toaster': 'Oven',
-  
-  // Cooling Devices
-  'Refrigerator': 'Komponen Kulkas',
-  'Freezer': 'Komponen Kulkas',
-  'Cooled-Dispenser': 'Komponen Kulkas',
-  'Non-Cooled-Dispenser': 'Komponen Kulkas',
-  'Cooling-Display': 'Komponen Kulkas',
-
-  // Home Devices
-  'Clothes-Iron': 'Seterika',
-  'Boiler': 'Kompor Listrik',
-  'Hair-Dryer': 'Hair Dryer',
-  'Rotary-Mower': 'Kipas',
-  'Soldering-Iron': 'Solder',
-  'Vacuum-Cleaner': 'Vacum Cleaner',
-  'Washing-Machine': 'Mesin Cuci',
-  'Dishwasher': 'Mesin Cuci',
-  'Tumble-Dryer': 'Mesin Cuci',
-
-  // Air Control
-  'Ceiling-Fan': 'Kipas',
-  'Floor-Fan': 'Kipas',
-  'Exhaust-Fan': 'Kipas',
-  'Range-Hood': 'Kipas',
-  'Air-Conditioner': 'AC',
-  'Dehumidifier': 'AC',
-
-  // Office Equipment
-  'Printer': 'Printer',
-  'Calculator': 'Alat Tes Vol',
-
-  // Networking
-  'Router': 'Router',
-  'Network-Switch': 'Router',
-
-  // Lighting
-  'LED-Bulb': 'Lampu',
-  'Table-Lamp': 'Lampu',
-  'Straight-Tube-Fluorescent-Lamp': 'Lampu',
-  'Compact-Fluorescent-Lamps': 'Lampu',
-  'Christmas-Lights': 'Lampu',
-  'Neon-Sign': 'Neon Box',
-  'Street-Lamp': 'Lampu',
-
-  // Health Devices
-  'Blood-Pressure-Monitor': 'Alat Tensi',
-  'Electrocardiograph-Machine': 'Monitor',
-  'Glucose-Meter': 'Alat Tes Vol',
-  'Pulse-Oximeter': 'Alat Tes Vol',
-
-  // Vehicle
-  'Drone': 'Kipas',
-  'Electric-Bicycle': 'Aki Motor',
-
-  // Energy
-  'Photovoltaic-Panel': 'Panel Surya',
-  'Telephone-Set': 'Telefon',
-  'Flashlight': 'Senter',
-  'Smoke-Detector': 'Monitor'
-};
-
-const DEFAULT_SUGGESTIONS: { [key: string]: string[] } = {
-  'default': [
-    'Bawa ke pusat daur ulang elektronik terdekat',
-    'Pisahkan komponen sebelum mendaur ulang dengan benar',
-    'Jangan membuang di tempat sampah rumah tangga'
-  ]
-};
-
-export async function createDetection(req: Request, res: Response, next: NextFunction): Promise<void> {
+export const createDetection = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const user_id = (req as AuthRequest).user?.id;
-    if (!user_id) {
-      res.status(401).json({ message: 'Unauthorized' });
+    if (!req.file) {
+      res.status(400).json({ error: 'No image file provided' });
       return;
     }
 
-    const file = req.file;
-    if (!file) {
-      res.status(400).json({ message: 'No file uploaded' });
+    if (!req.user) {
+      res.status(401).json({ error: 'User not authenticated' });
       return;
     }
 
-    // Create a new scan record
-    const scanId = uuidv4();
-    const { data: scan, error: scanError } = await supabase
-      .from('scans')
-      .insert({
-        id: scanId,
-        user_id: user_id,
-        status: 'processing'
-      })
-      .select()
-      .single();
+    // Upload image to storage and get URL
+    const imageUrl = await uploadImage(req.file.buffer, req.file.originalname, req.file.mimetype);
 
-    if (scanError) {
-      throw scanError;
+    // Create scan record with metadata
+    const scanMetadata = {
+      original_filename: req.file.originalname,
+      mime_type: req.file.mimetype,
+      file_size: req.file.size,
+      upload_timestamp: new Date().toISOString()
+    };
+
+    const scan = await detectionService.createScan(req.user.id, scanMetadata);
+
+    let predictions: AIPrediction[] = [];
+    
+    try {
+      // Send image to AI service
+      const formData = new FormData();
+      formData.append('file', req.file.buffer, {
+        filename: req.file.originalname,
+        contentType: req.file.mimetype
+      });
+
+      const aiResponse = await axios.post<AIResponse>(env.aiUrl, formData, {
+        headers: {
+          ...formData.getHeaders()
+        }
+      });
+
+      predictions = aiResponse.data.predictions || [];
+      logger.info('AI service response received', { 
+        predictionsCount: predictions.length,
+        scanId: scan.id 
+      });
+    } catch (error: any) {
+      logger.error('AI service request failed', {
+        error: error?.message || 'Unknown error',
+        scanId: scan.id,
+        statusCode: error?.response?.status,
+        responseData: error?.response?.data
+      });
+      // Continue with empty predictions array
     }
 
-    // Upload image to GCS
-    const imageUrl = await uploadImage(file.buffer, file.originalname, file.mimetype);
+    const results = [];
 
-    // Create form data for YOLO API
-    const formData = new FormData();
-    formData.append('file', file.buffer, {
-      filename: file.originalname,
-      contentType: file.mimetype
+    // Process each prediction
+    for (const prediction of predictions) {
+      const detection = {
+        id: uuidv4(),
+        user_id: req.user.id,
+        scan_id: scan.id,
+        image_url: imageUrl,
+        category: prediction.category || 'unknown',
+        confidence: prediction.confidence || 0,
+        regression_result: prediction.regression_result || null,
+        description: prediction.description || null,
+        suggestion: Array.isArray(prediction.suggestion) ? prediction.suggestion : [],
+        risk_lvl: prediction.risk_lvl || null,
+        detection_source: prediction.detection_source || 'ai',
+        is_validated: false,
+        validated_by: null,
+        updated_at: new Date().toISOString()
+      };
+
+      // Format bbox coordinates as array [x1, y1, x2, y2]
+      const bboxCoordinates = prediction.bbox ? [
+        prediction.bbox[0],  // x1
+        prediction.bbox[1],  // y1
+        prediction.bbox[2],  // x2
+        prediction.bbox[3]   // y2
+      ] : null;
+
+      const result = await detectionService.createDetection(detection, bboxCoordinates);
+      results.push(result);
+    }
+
+    // If no predictions were made or AI service failed, create a default detection
+    if (results.length === 0) {
+      logger.info('Creating default detection due to no predictions', { scanId: scan.id });
+      const defaultDetection = {
+        id: uuidv4(),
+        user_id: req.user.id,
+        scan_id: scan.id,
+        image_url: imageUrl,
+        category: 'unknown',
+        confidence: 0,
+        regression_result: null,
+        description: null,
+        suggestion: [],
+        risk_lvl: null,
+        detection_source: 'manual',
+        is_validated: false,
+        validated_by: null,
+        updated_at: new Date().toISOString()
+      };
+
+      const result = await detectionService.createDetection(defaultDetection, null);
+      results.push(result);
+    }
+
+    // Format the response
+    const formattedResponse = {
+      user_id: req.user.id,
+      scan_id: scan.id,
+      detections: results.map(result => ({
+        id: result.id,
+        image_url: result.image_url,
+        category: result.category,
+        confidence: result.confidence,
+        regression_result: result.regression_result,
+        risk_lvl: result.risk_lvl,
+        detection_source: result.detection_source,
+        description: result.description,
+        suggestion: result.suggestion,
+        is_validated: result.is_validated,
+        validated_by: result.validated_by,
+        created_at: result.created_at,
+        updated_at: result.updated_at
+      }))
+    };
+
+    res.status(201).json(formattedResponse);
+  } catch (error) {
+    logger.error('Error in createDetection', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     });
+    next(error);
+  }
+};
 
-    // Call YOLO API
-    const yoloResponse = await axios.post(env.yoloUrl, formData, {
-      headers: {
-        ...formData.getHeaders()
-      }
-    });
-
-    const yoloPredictions = (yoloResponse.data as { predictions: any[] }).predictions;
-    const predictionsArray = [];
-
-    // Process each prediction independently
-    for (const yoloPred of yoloPredictions) {
-      try {
-        const yoloClassName = yoloPred.class_name;
-        const confidence = yoloPred.confidence;
-        // Map YOLO class name to our category
-        const validatedCategory = YOLO_TO_CATEGORY_MAP[yoloClassName] || yoloClassName;
-        const detectionId = uuidv4();
-        let regression_result = null;
-        let originalPrice = null;
-        let correctedPrice = null;
-        let description = null;
-        let suggestionArray: string[] = [];
-        let risk_lvl = 1;
-
-        // Get description and suggestions from Gemini
-        try {
-          const geminiResponse = await axios.post<GeminiResponse>('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent', {
-            contents: [{
-              parts: [{
-                text: `Describe this e-waste item in Indonesian (10-40 words): ${validatedCategory}`
-              }]
-            }]
-          }, {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': env.geminiApiKey
-            }
-          });
-          
-          if (geminiResponse.data?.candidates?.[0]) {
-            const text = geminiResponse.data.candidates[0].content.parts[0].text;
-            const [desc, ...suggestions] = text.split('\n').filter((line: string) => line.trim());
-            description = desc;
-            suggestionArray = suggestions.slice(0, 3); // Take only first 3 suggestions
-          }
-        } catch (geminiErr) {
-          console.error('Gemini API call failed:', geminiErr);
-          // Use default suggestions if Gemini fails
-          suggestionArray = DEFAULT_SUGGESTIONS[validatedCategory] || DEFAULT_SUGGESTIONS.default;
-        }
-
-        // Get price prediction
-        try {
-          const priceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-            object: validatedCategory
-          });
-          regression_result = (priceResponse.data as { price: number }).price;
-          correctedPrice = regression_result;
-        } catch (priceErr) {
-          console.error('Price prediction failed:', priceErr);
-          regression_result = null;
-          correctedPrice = null;
-        }
-
-        // Only get original price if category was mapped
-        if (validatedCategory !== yoloClassName) {
-          try {
-            const originalPriceResponse = await axios.post(`${env.yoloUrl.replace('/object', '')}/price`, {
-              object: validatedCategory
-            });
-            originalPrice = (originalPriceResponse.data as { price: number }).price;
-          } catch (priceErr) {
-            console.error('Original price prediction failed:', priceErr);
-            originalPrice = null;
-          }
-        }
-
-        // Create object record
-        const { error: objectError } = await supabase
-          .from('objects')
-          .insert({
-            id: detectionId,
-            user_id,
-            scan_id: scanId,
-            image_url: imageUrl,
-            detection_source: 'YOLO',
-            category: validatedCategory,
-            confidence,
-            regression_result,
-            description,
-            suggestion: suggestionArray.join('|'),
-            risk_lvl,
-            is_validated: false
-          });
-
-        if (objectError) {
-          throw objectError;
-        }
-
-        // Create retraining data entry with bbox coordinates
-        const bbox = yoloPred.bbox || [0, 0, 0, 0];
-        await retrainingService.createRetrainingData({
-          image_url: imageUrl,
-          original_category: yoloClassName,
-          bbox_coordinates: {
-            x: bbox[0],
-            y: bbox[1],
-            width: bbox[2] - bbox[0],
-            height: bbox[3] - bbox[1]
-          },
-          confidence_score: confidence,
-          corrected_category: validatedCategory !== yoloClassName ? validatedCategory : null,
-          original_price: originalPrice,
-          corrected_price: correctedPrice,
-          model_version: 'YOLOv11',
-          user_id,
-          object_id: detectionId
-        });
-
-        predictionsArray.push({
-          id: detectionId,
-          category: validatedCategory,
-          confidence,
-          regression_result,
-          description,
-          suggestion: suggestionArray,
-          risk_lvl,
-          detection_source: 'YOLO',
-          image_url: imageUrl
-        });
-      } catch (err) {
-        console.error('Error processing individual prediction:', {
-          error: err,
-          prediction: yoloPred
-        });
-        continue;
-      }
-    }
-
-    // Update scan status
-    const { error: updateError } = await supabase
-      .from('scans')
-      .update({ status: 'pending' })
-      .eq('id', scanId);
-
-    if (updateError) {
-      throw updateError;
-    }
-
-    // If no predictions were processed, return no e-waste message
-    if (predictionsArray.length === 0) {
-      res.status(200).json({
-        message: 'No e-waste detected'
+export const getDetectionsByUser = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not authenticated',
+        statusCode: 401
       });
       return;
     }
 
-    res.status(200).json({
-      message: 'Detection completed successfully',
-      data: {
-        scan_id: scanId,
-        predictions: predictionsArray
-      }
+    const query = detectionQuerySchema.parse(req.query);
+    const result = await detectionService.getDetectionsByUser(userId);
+
+    res.json({
+      data: result,
+      total: result.length,
+      page: query.page || 1,
+      limit: query.limit || 10
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
-}
+};
+
+export const getDetectionsByScan = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { scanId } = req.params;
+    const query = detectionQuerySchema.parse(req.query);
+    const result = await detectionService.getDetectionsByScan(scanId);
+
+    res.json({
+      data: result,
+      total: result.length,
+      page: query.page || 1,
+      limit: query.limit || 10
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const validateDetection = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { objectId } = req.params;
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({
+        error: 'Unauthorized',
+        message: 'User not authenticated',
+        statusCode: 401
+      });
+      return;
+    }
+
+    // Accept corrected fields
+    const { category, corrected_price, bbox_coordinates } = req.body;
+
+    // 1. Fetch detection (object)
+    const detection = await detectionService.getDetectionById(objectId);
+    if (!detection) {
+      res.status(404).json({ message: 'Detection not found' });
+      return;
+    }
+
+    // 2. Update detection as validated
+    const detectionUpdate: {
+      is_validated: boolean;
+      validated_by: string;
+      updated_at: string;
+      category?: string;
+    } = {
+      is_validated: true,
+      validated_by: userId,
+      updated_at: new Date().toISOString()
+    };
+    if (category) detectionUpdate.category = category;
+    await detectionService.updateDetection(objectId, detectionUpdate);
+
+    // 3. Update retraining_data
+    const retrainingData = await retrainingService.getRetrainingDataByObjectId(objectId);
+    if (retrainingData) {
+      await retrainingService.updateRetrainingData(retrainingData.id, {
+        corrected_category: category,
+        corrected_price,
+        bbox_coordinates,
+        is_verified: true,
+        verified_by: userId,
+        updated_at: new Date().toISOString()
+      });
+    }
+
+    // 4. Insert validation_history
+    if (detection) {
+      const validationService = require('../services/validation').default;
+      await validationService.createValidationHistory({
+        id: uuidv4(),
+        object_id: objectId,
+        user_id: userId,
+        action: ValidationAction.VERIFY,
+        previous_category: detection.category,
+        new_category: category || detection.category,
+        previous_confidence: detection.confidence,
+        new_confidence: detection.confidence, // or new value if changed
+        notes: '',
+        created_at: new Date().toISOString()
+      });
+    }
+
+    res.json({
+      message: 'Detection validated, retraining data and validation history updated.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export async function getAllDetections(req: Request, res: Response, next: NextFunction) {
   try {
@@ -546,124 +337,133 @@ export async function getAllDetections(req: Request, res: Response, next: NextFu
     const category = req.query.category as string;
     const detection_source = req.query.detection_source as string;
 
-    // First, get all scans with pagination
-    const { data: scans, error: scansError } = await supabase
-      .from('scans')
-      .select('*')
-      .order('created_at', { ascending: false })
+    // Build the query
+    let query = supabase
+      .from('objects')
+      .select('*, scans:scans(*)')
+      .order('created_at', { ascending: false });
+
+    // Apply filters
+    if (search) {
+      query = query.ilike('category', `%${search}%`);
+    }
+    if (category) {
+      query = query.eq('category', category);
+    }
+    if (detection_source) {
+      query = query.eq('detection_source', detection_source);
+    }
+
+    // Get paginated results
+    const { data: detections, error: detectionsError } = await query
       .range(offset, offset + limit - 1);
 
-    if (scansError) {
-      throw scansError;
+    if (detectionsError) {
+      throw detectionsError;
     }
 
     // Get total count for pagination
     const { count, error: countError } = await supabase
-      .from('scans')
-      .select('*', { count: 'exact', head: true });
+      .from('objects')
+      .select('id', { count: 'exact' });
 
     if (countError) {
       throw countError;
     }
 
-    // Get objects for each scan
-    const scansWithObjects: ScanWithObjects[] = [];
-    for (const scan of scans) {
-      // Get objects for this scan
-      const { data: objects, error: objectsError } = await supabase
-        .from('objects')
-        .select('*')
-        .eq('scan_id', scan.id)
-        .order('created_at', { ascending: false });
+    // --- SUMMARY STATS ---
+    // Fetch all objects for summary stats (no pagination)
+    const { data: allObjects, error: allObjectsError } = await supabase
+      .from('objects')
+      .select('*');
+    if (allObjectsError) throw allObjectsError;
 
-      if (objectsError) {
-        throw objectsError;
-      }
+    // Category distribution
+    const categoryDistributionMap = new Map();
+    allObjects.forEach(obj => {
+      categoryDistributionMap.set(obj.category, (categoryDistributionMap.get(obj.category) || 0) + 1);
+    });
+    const categoryDistribution = Array.from(categoryDistributionMap.entries()).map(([category, count]) => ({ category, count }));
 
-      // Filter objects if category or detection_source is provided
-      let filteredObjects = objects;
-      if (category || detection_source) {
-        filteredObjects = objects.filter(obj => {
-          const categoryMatch = !category || obj.category === category;
-          const sourceMatch = !detection_source || obj.detection_source === detection_source;
-          return categoryMatch && sourceMatch;
-        });
+    // Damage level distribution
+    const damageLevelDistributionMap = new Map();
+    allObjects.forEach(obj => {
+      if (obj.risk_lvl != null) {
+        damageLevelDistributionMap.set(obj.risk_lvl, (damageLevelDistributionMap.get(obj.risk_lvl) || 0) + 1);
       }
+    });
+    const damageLevelDistribution = Array.from(damageLevelDistributionMap.entries()).map(([riskLevel, count]) => ({ riskLevel, count }));
 
-      // Only include scans that have objects after filtering
-      if (filteredObjects.length > 0) {
-        // Transform suggestion fields from pipe-separated strings to arrays with intelligent parsing
-        const transformedObjects = filteredObjects.map(obj => ({
-          ...obj,
-          suggestion: obj.suggestion ? parseSuggestionFragments(obj.suggestion) : []
-        }));
-        
-        scansWithObjects.push({
-          ...scan,
-          objects: transformedObjects
-        });
-      }
+    // Max risk
+    const maxRisk = allObjects.reduce((max, obj) => obj.risk_lvl != null && obj.risk_lvl > max ? obj.risk_lvl : max, 0);
+
+    // Unique categories
+    const uniqueCategories = categoryDistribution.length;
+
+    // Most recent date
+    const mostRecentDate = allObjects.reduce((latest, obj) => {
+      if (!obj.created_at) return latest;
+      const date = new Date(obj.created_at);
+      return (!latest || date > latest) ? date : latest;
+    }, null);
+
+    // Group detections by scan
+    interface ScanGroup {
+      scan_id: string;
+      scan: any;
+      detections: Array<{
+        id: string;
+        user_id: string;
+        scan_id: string;
+        image_url: string;
+        category: string;
+        confidence: number;
+        regression_result: number | null;
+        description: string | null;
+        suggestion: string[];
+        risk_lvl: number;
+        bbox_coordinates: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        } | null;
+        is_validated: boolean;
+        created_at: string;
+        updated_at: string;
+        scans?: any;
+      }>;
     }
 
-    // Calculate total pages
-    const total = count || 0;
-    const last_page = Math.ceil(total / limit);
-  
+    const scanGroups: Record<string, ScanGroup['detections']> = {};
+    if (detections) {
+      for (const detection of detections) {
+        const scanId = detection.scan_id;
+        if (!scanGroups[scanId]) {
+          scanGroups[scanId] = [];
+        }
+        scanGroups[scanId].push(detection);
+      }
+    }
+    const formattedData = Object.entries(scanGroups).map(([scanId, detections]) => ({
+      scan_id: scanId,
+      scan: detections[0].scans,
+      detections: detections.map(d => ({ ...d, scans: undefined }))
+    }));
+
     res.json({
-      data: scansWithObjects,
-      total,
-      current_page: page,
-      last_page,
-      per_page: limit
+      data: formattedData,
+      total: count || 0,
+      page,
+      limit,
+      categoryDistribution,
+      damageLevelDistribution,
+      maxRisk,
+      uniqueCategories,
+      mostRecentDate: mostRecentDate ? mostRecentDate.toISOString() : null
     });
-  } catch (err) {
-    next(err);
-  }
-}
-
-export async function getDetectionsByUser(req: Request, res: Response, next: NextFunction) {
-  try {
-    const userId = req.params.userId;
-    
-    // Get all scans for the user
-    const { data: scans, error: scansError } = await supabase
-      .from('scans')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (scansError) {
-      throw scansError;
-    }
-
-    // Get objects for each scan
-    const scansWithObjects: ScanWithObjects[] = [];
-    for (const scan of scans) {
-      const { data: objects, error: objectsError } = await supabase
-        .from('objects')
-        .select('*')
-        .eq('scan_id', scan.id)
-        .order('created_at', { ascending: false });
-
-      if (objectsError) {
-        throw objectsError;
-      }
-
-      // Transform suggestion fields from pipe-separated strings to arrays with intelligent parsing
-      const transformedObjects = (objects || []).map(obj => ({
-        ...obj,
-        suggestion: obj.suggestion ? parseSuggestionFragments(obj.suggestion) : []
-      }));
-
-      scansWithObjects.push({
-          ...scan,
-        objects: transformedObjects
-    });
-    }
-    
-    res.json(scansWithObjects);
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    next(error);
   }
 }
 

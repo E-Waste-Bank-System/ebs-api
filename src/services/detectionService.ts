@@ -1,13 +1,23 @@
 import supabase from '../utils/supabase';
-import { Detection } from '../models/detectionModel';
+import { Database } from '../types/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
+type Detection = Database['public']['Tables']['objects']['Row'];
+
 // Utility function to properly parse suggestion fragments into complete sentences
-function parseSuggestionFragments(suggestionString: string): string[] {
-  if (!suggestionString) return [];
+function parseSuggestionFragments(suggestion: string | string[] | null): string[] {
+  // If suggestion is already an array, return it
+  if (Array.isArray(suggestion)) {
+    return suggestion;
+  }
+  
+  // If suggestion is null or empty string, return empty array
+  if (!suggestion) {
+    return [];
+  }
   
   // Split by pipe separator
-  const fragments = suggestionString.split('|').map(s => s.trim()).filter(s => s);
+  const fragments = suggestion.split('|').map(s => s.trim()).filter(s => s);
   
   if (fragments.length === 0) return [];
   
@@ -78,7 +88,7 @@ export interface DetectionWithPredictions {
   created_at: string;
 }
 
-export async function createScan(userId: string) {
+export async function createScan(userId: string, metadata?: Record<string, any>) {
   try {
     const scanId = uuidv4();
     console.log('Attempting to create scan with ID:', scanId, 'for user:', userId);
@@ -107,6 +117,7 @@ export async function createScan(userId: string) {
         id: scanId,
         user_id: userId,
         status: 'pending',
+        metadata: metadata || null,
         created_at: new Date().toISOString()
       })
       .select()
@@ -138,22 +149,66 @@ export async function createScan(userId: string) {
   }
 }
 
-export async function createDetection(detection: Omit<Detection, 'created_at'>) {
+export async function createDetection(detection: Omit<Detection, 'created_at'>, bbox: number[] | null) {
   try {
-    const { data, error } = await supabase
+    // Create the detection in objects table
+    const { data: detectionData, error: detectionError } = await supabase
       .from('objects')
       .insert(detection)
       .select()
       .single();
     
-    if (error) {
+    if (detectionError) {
       console.error('Supabase error during detection creation:', {
-        error,
+        error: detectionError,
         detection: { ...detection, image_url: '[REDACTED]' }
       });
-      throw error;
+      throw detectionError;
     }
-    return data;
+
+    // Create retraining data record
+    const retrainingData = {
+      id: uuidv4(),
+      user_id: detection.user_id,
+      object_id: detectionData.id,
+      image_url: detection.image_url,
+      original_category: detection.category,
+      bbox_coordinates: bbox ? {
+        x: bbox[0],
+        y: bbox[1],
+        width: bbox[2] - bbox[0],
+        height: bbox[3] - bbox[1]
+      } : null,
+      confidence_score: detection.confidence,
+      corrected_category: null, // This will be filled when corrections are made
+      original_price: detection.regression_result,
+      corrected_price: null, // This will be filled when corrections are made
+      is_verified: false,
+      verified_at: null,
+      verified_by: null,
+      model_version: '1.0', // This should be updated based on your model versioning
+      metadata: {
+        detection_source: detection.detection_source,
+        risk_level: detection.risk_lvl,
+        description: detection.description,
+        suggestions: detection.suggestion
+      },
+      created_at: new Date().toISOString()
+    };
+
+    const { error: retrainingError } = await supabase
+      .from('retraining_data')
+      .insert(retrainingData);
+
+    if (retrainingError) {
+      console.error('Supabase error during retraining data creation:', {
+        error: retrainingError,
+        retrainingData: { ...retrainingData, image_url: '[REDACTED]' }
+      });
+      // Don't throw here, as the detection was already created
+    }
+
+    return detectionData;
   } catch (err) {
     console.error('Unexpected error during detection creation:', {
       error: err,
@@ -330,4 +385,30 @@ export async function updateDetection(id: string, fields: Partial<Detection>) {
   }
   
   return data;
+}
+
+export async function getDetectionsByScan(scanId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('objects')
+      .select('*')
+      .eq('scan_id', scanId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching detections by scan:', {
+        error,
+        scanId
+      });
+      throw error;
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('Unexpected error fetching detections by scan:', {
+      error: err,
+      scanId
+    });
+    throw err;
+  }
 }

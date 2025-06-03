@@ -11,9 +11,7 @@ const envSchema = z.object({
   GCP_BUCKET: z.string().min(1),
   GCP_PROJECT_ID: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1),
-  YOLO_URL: z.string().url(),
-  REGRESSION_URL: z.string().url(),
-  GEMINI_API_KEY: z.string().min(1),
+  AI_URL: z.string().url(),
   CLIENT_ORIGIN: z.string().url().optional(),
 });
 
@@ -27,9 +25,7 @@ const config = {
   gcsBucket: _env.GCP_BUCKET,
   gcsProjectId: _env.GCP_PROJECT_ID,
   googleClientId: _env.GOOGLE_CLIENT_ID,
-  yoloUrl: _env.YOLO_URL,
-  regressionUrl: _env.REGRESSION_URL,
-  geminiApiKey: _env.GEMINI_API_KEY,
+  aiUrl: _env.AI_URL,
   clientOrigin: _env.CLIENT_ORIGIN,
 };
 

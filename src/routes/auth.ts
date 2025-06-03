@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { login, getToken } from '../controllers/authController';
-import validate from '../middlewares/validate';
+import validateBody from '../middlewares/validateBody';
 import { z } from 'zod';
 
 const router = Router();
@@ -15,6 +15,12 @@ const router = Router();
 /**
  * @swagger
  * components:
+ *   securitySchemes:
+ *     bearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: JWT
+ *       description: JWT token obtained from login or token endpoints
  *   schemas:
  *     AuthResponse:
  *       type: object
@@ -42,6 +48,23 @@ const router = Router();
  *           email: "user@example.com"
  *           is_admin: false
  *         token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+ *     ErrorResponse:
+ *       type: object
+ *       properties:
+ *         error:
+ *           type: string
+ *           description: Error type
+ *         message:
+ *           type: string
+ *           description: Detailed error message
+ *         statusCode:
+ *           type: integer
+ *           description: HTTP status code
+ *         details:
+ *           type: array
+ *           items:
+ *             type: object
+ *           description: Additional error details (for validation errors)
  */
 
 /**
@@ -81,8 +104,22 @@ const router = Router();
  *               $ref: '#/components/schemas/AuthResponse'
  *       400:
  *         description: Missing required fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: Invalid credentials or user not authorized as admin
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 
 /**
@@ -116,8 +153,22 @@ const router = Router();
  *               $ref: '#/components/schemas/AuthResponse'
  *       400:
  *         description: Missing user_id field
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: Invalid user ID or user not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 
 const loginSchema = z.object({
@@ -129,7 +180,7 @@ const tokenSchema = z.object({
   user_id: z.string().uuid(),
 });
 
-router.post('/login', validate(loginSchema), login);
-router.post('/token', validate(tokenSchema), getToken);
+router.post('/login', validateBody(loginSchema), login);
+router.post('/token', validateBody(tokenSchema), getToken);
 
 export default router;

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as retrainingService from '../services/retrainingService';
 import { AuthRequest } from '../middlewares/auth';
+import supabase from '../utils/supabase';
 
 export async function createRetrainingEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -12,7 +13,6 @@ export async function createRetrainingEntry(req: Request, res: Response, next: N
       model_version,
       user_id,
       object_id,
-      original_price,
       corrected_price
     } = req.body;
 
@@ -29,11 +29,12 @@ export async function createRetrainingEntry(req: Request, res: Response, next: N
       bbox_coordinates,
       confidence_score: parseFloat(confidence_score) || 0,
       corrected_category: null,
-      original_price: original_price ? parseFloat(original_price) : null,
       corrected_price: corrected_price ? parseFloat(corrected_price) : null,
       model_version,
       user_id,
-      object_id
+      object_id,
+      verified_by: null,
+      updated_at: new Date().toISOString()
     });
 
     res.status(201).json(data);
@@ -175,6 +176,39 @@ export async function getRetrainingDataByObjectId(req: Request, res: Response, n
     
     res.json(data);
   } catch (err) {
+    next(err);
+  }
+}
+
+// GET /retraining
+export async function getRetrainingData(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { data, error } = await supabase.from('retraining_data').select('*').order('created_at', { ascending: false });
+    if (error) {
+      res.status(500).json({ message: 'Failed to fetch retraining data' });
+      return;
+    }
+    res.json(data);
+  } catch (err: unknown) {
+    next(err);
+  }
+}
+
+// POST /retraining/submit
+export async function submitRetrainingRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { user_id, image_url, label } = req.body;
+    if (!user_id || !image_url || !label) {
+      res.status(400).json({ message: 'user_id, image_url, and label are required' });
+      return;
+    }
+    const { data, error } = await supabase.from('retraining_data').insert([{ user_id, image_url, label }]).select();
+    if (error) {
+      res.status(500).json({ message: 'Failed to submit retraining request' });
+      return;
+    }
+    res.status(201).json(data[0]);
+  } catch (err: unknown) {
     next(err);
   }
 }

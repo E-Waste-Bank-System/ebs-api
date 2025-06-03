@@ -1,8 +1,15 @@
 import { Router } from 'express';
+import isAuthenticated from '../middlewares/auth';
 import upload from '../middlewares/upload';
-import { isAdmin, isAuthenticated } from '../middlewares/role';
-import * as detectionController from '../controllers/detectionController';
-import { updateDetection } from '../controllers/detectionController';
+import {
+  createDetection,
+  getDetectionsByUser,
+  getDetectionsByScan,
+  validateDetection,
+  getAllDetections
+} from '../controllers/detectionController';
+import validateQuery from '../middlewares/validateQuery';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -23,6 +30,10 @@ const router = Router();
  *         - id
  *         - user_id
  *         - scan_id
+ *         - image_url
+ *         - category
+ *         - confidence
+ *         - detection_source
  *       properties:
  *         id:
  *           type: string
@@ -74,22 +85,14 @@ const router = Router();
  *           maximum: 10
  *           nullable: true
  *           description: AI-evaluated risk level of the e-waste (1-10)
- *         scans:
- *           type: object
- *           description: Related scan session information
- *           properties:
- *             id:
- *               type: string
- *               format: uuid
- *               description: Scan session ID
- *             user_id:
- *               type: string
- *               format: uuid
- *               description: User ID who created the scan
- *             status:
- *               type: string
- *               enum: [pending, processing, completed, failed]
- *               description: Status of the scan session
+ *         is_validated:
+ *           type: boolean
+ *           description: Whether the detection has been validated by a user
+ *         validated_by:
+ *           type: string
+ *           format: uuid
+ *           nullable: true
+ *           description: ID of the user who validated the detection
  *         created_at:
  *           type: string
  *           format: date-time
@@ -110,6 +113,8 @@ const router = Router();
  *         description: "Keyboard komputer hitam dengan tombol mekanik, kondisi masih baik namun kotor."
  *         suggestion: ["Bersihkan dengan alkohol isopropil", "Cek fungsi tombol sebelum daur ulang", "Pisahkan komponen plastik dan logam"]
  *         risk_lvl: 3
+ *         is_validated: false
+ *         validated_by: null
  *         created_at: "2023-06-01T12:00:00Z"
  *         updated_at: "2023-06-01T12:30:00Z"
  *     
@@ -202,33 +207,34 @@ const router = Router();
  *         created_at: "2023-06-01T12:00:00Z"
  */
 
+const detectionSchema = z.object({
+  category: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  description: z.string().max(200).optional(),
+  suggestion: z.array(z.string()).max(3).optional(),
+  risk_lvl: z.number().min(1).max(10).optional(),
+});
+
 /**
  * @swagger
  * /detections:
  *   post:
- *     summary: Create a new e-waste detection
- *     description: |
- *       Uploads an image for analysis, processes it with YOLO object detection model, 
- *       enriches with Gemini for description and suggestions, and estimates price with regression model.
+ *     summary: Create a new detection
+ *     description: Upload an image and create a new detection with AI analysis
  *     tags: [Detections]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         multipart/form-data:
  *           schema:
  *             type: object
- *             required:
- *               - file
- *               - user_id
  *             properties:
- *               file:
+ *               image:
  *                 type: string
  *                 format: binary
- *                 description: Image file to analyze for e-waste detection
- *               user_id:
- *                 type: string
- *                 format: uuid
- *                 description: ID of the user creating the detection
+ *                 description: Image file to analyze
  *     responses:
  *       201:
  *         description: Detection created successfully
@@ -237,106 +243,137 @@ const router = Router();
  *             schema:
  *               type: object
  *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/Detection'
  *                 message:
  *                   type: string
- *                   example: "Detection created successfully"
- *                 scan_id:
- *                   type: string
- *                   format: uuid
- *                   description: ID of the created scan
- *                 predictions:
- *                   type: array
- *                   description: Array of detection results
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         format: uuid
- *                       category:
- *                         type: string
- *                       confidence:
- *                         type: number
- *                         format: float
- *                       regression_result:
- *                         type: number
- *                         nullable: true
- *                       description:
- *                         type: string
- *                         nullable: true
- *                       suggestion:
- *                         type: array
- *                         items:
- *                           type: string
- *                       risk_lvl:
- *                         type: integer
- *                         nullable: true
- *                       detection_source:
- *                         type: string
- *                       image_url:
- *                         type: string
- *                         format: uri
- *                         description: URL of the uploaded and analyzed image
- *               example:
- *                 message: "Detection created successfully"
- *                 scan_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
- *                 predictions: [
- *                   {
- *                     id: "550e8400-e29b-41d4-a716-446655440000",
- *                     category: "Keyboard",
- *                     confidence: 0.95,
- *                     regression_result: 75000,
- *                     description: "Keyboard komputer hitam dengan tombol mekanik, kondisi masih baik namun kotor.",
- *                     suggestion: ["Bersihkan dengan alkohol isopropil", "Cek fungsi tombol sebelum daur ulang", "Pisahkan komponen plastik dan logam"],
- *                     risk_lvl: 3,
- *                     detection_source: "YOLO",
- *                     image_url: "https://storage.googleapis.com/ebs-bucket/detection_123456.jpg"
- *                   }
- *                 ]
  *       400:
- *         description: Bad request - missing required fields
+ *         description: No image file provided
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       500:
- *         description: Server error during processing
- * 
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/', isAuthenticated, upload.single('image'), createDetection);
+
+/**
+ * @swagger
+ * /detections/user:
  *   get:
- *     summary: Get all detections with filtering and pagination
- *     description: Admin-only endpoint to retrieve all detections with various filtering options
+ *     summary: Get detections by user
+ *     description: Retrieve all detections for the authenticated user
  *     tags: [Detections]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
- *           default: 1
- *           minimum: 1
- *         description: Page number for pagination
+ *         description: Page number
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 10
- *           minimum: 1
- *           maximum: 100
  *         description: Number of items per page
- *       - in: query
- *         name: search
- *         schema:
- *           type: string
- *         description: Search term for category or description
  *       - in: query
  *         name: category
  *         schema:
  *           type: string
- *         description: Filter by specific category
+ *         description: Filter by category
  *       - in: query
- *         name: detection_source
+ *         name: is_validated
  *         schema:
- *           type: string
- *           enum: [YOLO, 'Gemini Interfered']
- *         description: Filter by detection source
+ *           type: boolean
+ *         description: Filter by validation status
  *     responses:
  *       200:
- *         description: Paginated list of detections
+ *         description: List of detections
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/DetectionScanGroup'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of detections
+ *                 page:
+ *                   type: integer
+ *                   description: Current page number
+ *                 limit:
+ *                   type: integer
+ *                   description: Number of items per page
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/user', isAuthenticated, getDetectionsByUser);
+
+/**
+ * @swagger
+ * /detections/scan/{scanId}:
+ *   get:
+ *     summary: Get detections by scan ID
+ *     description: Retrieve all detections for a specific scan session
+ *     tags: [Detections]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: scanId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Scan ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Number of items per page
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Filter by category
+ *       - in: query
+ *         name: is_validated
+ *         schema:
+ *           type: boolean
+ *         description: Filter by validation status
+ *     responses:
+ *       200:
+ *         description: List of detections for the scan
  *         content:
  *           application/json:
  *             schema:
@@ -348,85 +385,51 @@ const router = Router();
  *                     $ref: '#/components/schemas/Detection'
  *                 total:
  *                   type: integer
- *                   description: Total number of records
- *                 current_page:
+ *                   description: Total number of detections
+ *                 page:
  *                   type: integer
  *                   description: Current page number
- *                 last_page:
- *                   type: integer
- *                   description: Last page number
- *                 per_page:
+ *                 limit:
  *                   type: integer
  *                   description: Number of items per page
  *       401:
- *         description: Unauthorized - valid token required
- *       403:
- *         description: Forbidden - admin access required
- * 
- * /detections/user/{userId}:
- *   get:
- *     summary: Get all detections for a specific user
- *     description: Retrieves all detections for a user, grouped by scan sessions
- *     tags: [Detections]
- *     parameters:
- *       - in: path
- *         name: userId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: User ID to get detections for
- *     responses:
- *       200:
- *         description: List of detections grouped by scan
+ *         description: Unauthorized
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/DetectionScanGroup'
- *       401:
- *         description: Unauthorized - valid token required
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
- *         description: No detections found for this user
- * 
- * /detections/{id}:
- *   get:
- *     summary: Get detection by ID
- *     description: Retrieves a single detection by its unique identifier
- *     tags: [Detections]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Detection ID
- *     responses:
- *       200:
- *         description: Detection details
+ *         description: Scan not found
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Detection'
- *       401:
- *         description: Unauthorized - valid token required
- *       404:
- *         description: Detection not found
- * 
- *   put:
- *     summary: Update detection details
- *     description: Updates specific fields of a detection (requires ownership verification)
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/scan/:scanId', isAuthenticated, getDetectionsByScan);
+
+/**
+ * @swagger
+ * /detections/{objectId}/validate:
+ *   post:
+ *     summary: Validate a detection
+ *     description: Validate or update a detection's category and confidence
  *     tags: [Detections]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: objectId
  *         required: true
  *         schema:
  *           type: string
  *           format: uuid
- *         description: Detection ID
+ *         description: Object ID
  *     requestBody:
  *       required: true
  *       content:
@@ -434,108 +437,138 @@ const router = Router();
  *           schema:
  *             type: object
  *             properties:
- *               description:
- *                 type: string
- *                 description: Updated description
- *               suggestion:
- *                 type: string
- *                 description: Updated suggestions (up to 3 points, joined by ' | ')
  *               category:
  *                 type: string
- *                 description: Updated category
- *               risk_lvl:
- *                 type: integer
- *                 minimum: 1
- *                 maximum: 10
- *                 description: Updated risk level
- *             example:
- *               description: "Keyboard mekanik dalam kondisi baik"
- *               suggestion: "Bersihkan dengan hati-hati | Pisahkan komponen elektronik | Daur ulang di pusat terdekat"
- *               category: "Keyboard"
- *               risk_lvl: 2
+ *                 description: Corrected category
+ *               confidence:
+ *                 type: number
+ *                 format: float
+ *                 minimum: 0
+ *                 maximum: 1
+ *                 description: Updated confidence score
  *     responses:
  *       200:
- *         description: Detection updated successfully
+ *         description: Detection validated successfully
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Detection'
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   $ref: '#/components/schemas/Detection'
+ *                 message:
+ *                   type: string
  *       400:
- *         description: Invalid request data
- *       401:
- *         description: Unauthorized - valid token required
- *       403:
- *         description: Forbidden - user doesn't own this detection
- *       404:
- *         description: Detection not found
- * 
- *   delete:
- *     summary: Delete detection
- *     description: Permanently removes a detection record
- *     tags: [Detections]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Detection ID
- *     responses:
- *       204:
- *         description: Detection deleted successfully
- *       401:
- *         description: Unauthorized - valid token required
- *       404:
- *         description: Detection not found
- * 
- * /detections/{id}/image:
- *   put:
- *     summary: Update detection image
- *     description: Replaces the image for an existing detection
- *     tags: [Detections]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Detection ID
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             required:
- *               - file
- *             properties:
- *               file:
- *                 type: string
- *                 format: binary
- *                 description: New image file to replace the existing one
- *     responses:
- *       200:
- *         description: Image updated successfully
+ *         description: Invalid validation data
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/Detection'
- *       400:
- *         description: Missing file or invalid request
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
- *         description: Unauthorized - valid token required
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Detection not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
+router.post('/:objectId/validate', isAuthenticated, validateDetection);
 
-router.post('/', isAuthenticated, upload.single('file'), detectionController.createDetection);
-router.get('/', isAdmin, detectionController.getAllDetections);
-router.get('/user/:userId', detectionController.getDetectionsByUser);
-router.get('/:id', detectionController.getDetectionById);
-router.delete('/:id', detectionController.deleteDetection);
-router.put('/:id', detectionController.updateDetection);
-router.put('/:id/image', upload.single('file'), detectionController.updateDetectionImage);
+/**
+ * @swagger
+ * /detections:
+ *   get:
+ *     summary: Get all detections
+ *     description: Retrieve all detections with pagination and filters
+ *     tags: [Detections]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Number of items per page
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search term
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *         description: Filter by category
+ *       - in: query
+ *         name: detection_source
+ *         schema:
+ *           type: string
+ *         description: Filter by detection source
+ *     responses:
+ *       200:
+ *         description: List of detections
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/DetectionScanGroup'
+ *                 total:
+ *                   type: integer
+ *                   description: Total number of detections
+ *                 page:
+ *                   type: integer
+ *                   description: Current page number
+ *                 limit:
+ *                   type: integer
+ *                   description: Number of items per page
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.get('/', isAuthenticated, getAllDetections);
+
+// Unique categories endpoint
+router.get('/categories', async (req, res, next) => {
+  try {
+    const { data, error } = await require('../utils/supabase').default
+      .from('objects')
+      .select('category')
+      .neq('category', null);
+    if (error) throw error;
+    const categories = Array.from(new Set(data.map((obj: { category: string }) => obj.category))).sort();
+    res.json({ categories });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router; 

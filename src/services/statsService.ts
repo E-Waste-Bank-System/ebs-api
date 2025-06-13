@@ -53,47 +53,83 @@ async function getTrueTotalUsers(): Promise<number> {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  // 1. True total users from Supabase Auth Admin API
-  const totalUsers = await getTrueTotalUsers();
+  try {
+    // Initialize default values
+    const stats: DashboardStats = {
+      totalUsers: 0,
+      totalEwaste: 0,
+      monthlyStats: [],
+      categoryDistribution: []
+    };
 
-  // 2. Total e-waste from objects table
-  const { count: totalEwaste } = await supabase
-    .from('objects')
-    .select('*', { count: 'exact', head: true });
+    // 1. True total users from Supabase Auth Admin API
+    try {
+      stats.totalUsers = await getTrueTotalUsers();
+    } catch (error) {
+      console.error('Error getting total users:', error);
+    }
 
-  // 3. Monthly stats (last 4 months) from objects table
-  const fourMonthsAgo = new Date();
-  fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
+    // 2. Total e-waste from objects table
+    try {
+      const { count: totalEwaste } = await supabase
+        .from('objects')
+        .select('*', { count: 'exact', head: true });
+      stats.totalEwaste = totalEwaste || 0;
+    } catch (error) {
+      console.error('Error getting total e-waste:', error);
+    }
 
-  const { data: monthlyObjects } = await supabase
-    .from('objects')
-    .select('created_at')
-    .gte('created_at', fourMonthsAgo.toISOString())
-    .order('created_at', { ascending: true });
+    // 3. Monthly stats (last 4 months) from objects table
+    try {
+      const fourMonthsAgo = new Date();
+      fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
 
-  // Group by month
-  const monthlyCounts = new Map<string, number>();
-  monthlyObjects?.forEach(obj => {
-    const month = new Date(obj.created_at).toISOString().slice(0, 7);
-    monthlyCounts.set(month, (monthlyCounts.get(month) || 0) + 1);
-  });
+      const { data: monthlyObjects } = await supabase
+        .from('objects')
+        .select('created_at')
+        .gte('created_at', fourMonthsAgo.toISOString())
+        .order('created_at', { ascending: true });
 
-  // 4. Category distribution from objects table
-  const { data: categoryObjects } = await supabase
-    .from('objects')
-    .select('category');
+      // Group by month
+      const monthlyCounts = new Map<string, number>();
+      monthlyObjects?.forEach(obj => {
+        const month = new Date(obj.created_at).toISOString().slice(0, 7);
+        monthlyCounts.set(month, (monthlyCounts.get(month) || 0) + 1);
+      });
 
-  const categoryDistribution = new Map<string, number>();
-  categoryObjects?.forEach(obj => {
-    categoryDistribution.set(obj.category, (categoryDistribution.get(obj.category) || 0) + 1);
-  });
+      stats.monthlyStats = Array.from(monthlyCounts.entries()).map(([month, count]) => ({ month, count }));
+    } catch (error) {
+      console.error('Error getting monthly stats:', error);
+    }
 
-  return {
-    totalUsers: totalUsers || 0,
-    totalEwaste: totalEwaste || 0,
-    monthlyStats: Array.from(monthlyCounts.entries()).map(([month, count]) => ({ month, count })),
-    categoryDistribution: Array.from(categoryDistribution.entries()).map(([category, count]) => ({ category, count }))
-  };
+    // 4. Category distribution from objects table
+    try {
+      const { data: categoryObjects } = await supabase
+        .from('objects')
+        .select('category');
+
+      const categoryDistribution = new Map<string, number>();
+      categoryObjects?.forEach(obj => {
+        const category = obj.category || 'unknown';
+        categoryDistribution.set(category, (categoryDistribution.get(category) || 0) + 1);
+      });
+
+      stats.categoryDistribution = Array.from(categoryDistribution.entries()).map(([category, count]) => ({ category, count }));
+    } catch (error) {
+      console.error('Error getting category distribution:', error);
+    }
+
+    return stats;
+  } catch (error) {
+    console.error('Error in getDashboardStats:', error);
+    // Return default stats on error
+    return {
+      totalUsers: 0,
+      totalEwaste: 0,
+      monthlyStats: [],
+      categoryDistribution: []
+    };
+  }
 }
 
 export async function getEwasteStats(): Promise<EwasteStats> {

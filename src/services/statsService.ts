@@ -1,5 +1,6 @@
 import supabase from '../utils/supabase';
 import { Database } from '../types/supabase';
+import config from '../config/env';
 
 export interface DashboardStats {
   totalUsers: number;
@@ -23,6 +24,10 @@ export interface EwasteStats {
   }[];
   riskLevelDistribution: {
     riskLevel: number;
+    count: number;
+  }[];
+  damageLevelDistribution: {
+    damageLevel: number;
     count: number;
   }[];
 }
@@ -92,43 +97,86 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 export async function getEwasteStats(): Promise<EwasteStats> {
-  // Get total count from objects table
-  const { count: totalCount } = await supabase
-    .from('objects')
-    .select('*', { count: 'exact', head: true });
+  try {
+    // Get total count
+    const { count: totalCount, error: countError } = await supabase
+      .from('objects')
+      .select('*', { count: 'exact' });
 
-  // Get high risk count (risk_lvl > 7) from objects table
-  const { count: highRiskCount } = await supabase
-    .from('objects')
-    .select('*', { count: 'exact', head: true })
-    .gt('risk_lvl', 7);
+    if (countError) throw countError;
 
-  // Get category distribution from objects table
-  const { data: categoryObjects } = await supabase
-    .from('objects')
-    .select('category');
+    // Get high risk count (risk_lvl >= 4)
+    const { count: highRiskCount, error: highRiskError } = await supabase
+      .from('objects')
+      .select('*', { count: 'exact' })
+      .gte('risk_lvl', 4);
 
-  const categoryDistribution = new Map<string, number>();
-  categoryObjects?.forEach(obj => {
-    categoryDistribution.set(obj.category, (categoryDistribution.get(obj.category) || 0) + 1);
-  });
+    if (highRiskError) throw highRiskError;
 
-  // Get risk level distribution from objects table
-  const { data: riskStats } = await supabase
-    .from('objects')
-    .select('risk_lvl');
+    // Get category distribution
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('objects')
+      .select('category');
 
-  const riskLevelDistribution = new Map<number, number>();
-  riskStats?.forEach(obj => {
-    if (obj.risk_lvl) {
-      riskLevelDistribution.set(obj.risk_lvl, (riskLevelDistribution.get(obj.risk_lvl) || 0) + 1);
-    }
-  });
+    if (categoryError) throw categoryError;
 
-  return {
-    totalCount: totalCount || 0,
-    highRiskCount: highRiskCount || 0,
-    categoryDistribution: Array.from(categoryDistribution.entries()).map(([category, count]) => ({ category, count })),
-    riskLevelDistribution: Array.from(riskLevelDistribution.entries()).map(([riskLevel, count]) => ({ riskLevel, count }))
-  };
+    const categoryDistribution = categoryData.reduce((acc: { category: string; count: number }[], curr) => {
+      const existing = acc.find(item => item.category === curr.category);
+      if (existing) {
+        existing.count++;
+      } else {
+        acc.push({ category: curr.category, count: 1 });
+      }
+      return acc;
+    }, []);
+
+    // Get risk level distribution
+    const { data: riskData, error: riskError } = await supabase
+      .from('objects')
+      .select('risk_lvl');
+
+    if (riskError) throw riskError;
+
+    const riskLevelDistribution = riskData.reduce((acc: { riskLevel: number; count: number }[], curr) => {
+      if (curr.risk_lvl !== null) {
+        const existing = acc.find(item => item.riskLevel === curr.risk_lvl);
+        if (existing) {
+          existing.count++;
+        } else {
+          acc.push({ riskLevel: curr.risk_lvl, count: 1 });
+        }
+      }
+      return acc;
+    }, []);
+
+    // Get damage level distribution
+    const { data: damageData, error: damageError } = await supabase
+      .from('objects')
+      .select('damage_level');
+
+    if (damageError) throw damageError;
+
+    const damageLevelDistribution = damageData.reduce((acc: { damageLevel: number; count: number }[], curr) => {
+      if (curr.damage_level !== null) {
+        const existing = acc.find(item => item.damageLevel === curr.damage_level);
+        if (existing) {
+          existing.count++;
+        } else {
+          acc.push({ damageLevel: curr.damage_level, count: 1 });
+        }
+      }
+      return acc;
+    }, []);
+
+    return {
+      totalCount: totalCount || 0,
+      highRiskCount: highRiskCount || 0,
+      categoryDistribution,
+      riskLevelDistribution,
+      damageLevelDistribution
+    };
+  } catch (error) {
+    console.error('Error getting e-waste stats:', error);
+    throw error;
+  }
 } 

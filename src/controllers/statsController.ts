@@ -13,9 +13,12 @@ export async function getDashboardStats(req: Request, res: Response, next: NextF
 
 export async function getEwasteStats(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    console.log('Getting e-waste stats...');
     const stats = await statsService.getEwasteStats();
+    console.log('Stats response:', stats);
     res.json(stats);
   } catch (error) {
+    console.error('Error in getEwasteStats:', error);
     next(error);
   }
 } 

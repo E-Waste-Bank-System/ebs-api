@@ -83,6 +83,7 @@ export interface DetectionWithPredictions {
     description: string | null;
     suggestion: string[];
     risk_lvl: number | null;
+    damage_level: number | null;
     detection_source: string | null;
   }>;
   created_at: string;
@@ -151,70 +152,22 @@ export async function createScan(userId: string, metadata?: Record<string, any>)
 
 export async function createDetection(detection: Omit<Detection, 'created_at'>, bbox: number[] | null) {
   try {
-    // Create the detection in objects table
-    const { data: detectionData, error: detectionError } = await supabase
+    const { data, error } = await supabase
       .from('objects')
-      .insert(detection)
+      .insert({
+        ...detection,
+        damage_level: detection.damage_level || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
       .select()
       .single();
-    
-    if (detectionError) {
-      console.error('Supabase error during detection creation:', {
-        error: detectionError,
-        detection: { ...detection, image_url: '[REDACTED]' }
-      });
-      throw detectionError;
-    }
 
-    // Create retraining data record
-    const retrainingData = {
-      id: uuidv4(),
-      user_id: detection.user_id,
-      object_id: detectionData.id,
-      image_url: detection.image_url,
-      original_category: detection.category,
-      bbox_coordinates: bbox ? {
-        x: bbox[0],
-        y: bbox[1],
-        width: bbox[2] - bbox[0],
-        height: bbox[3] - bbox[1]
-      } : null,
-      confidence_score: detection.confidence,
-      corrected_category: null, // This will be filled when corrections are made
-      original_price: detection.regression_result,
-      corrected_price: null, // This will be filled when corrections are made
-      is_verified: false,
-      verified_at: null,
-      verified_by: null,
-      model_version: '1.0', // This should be updated based on your model versioning
-      metadata: {
-        detection_source: detection.detection_source,
-        risk_level: detection.risk_lvl,
-        description: detection.description,
-        suggestions: detection.suggestion
-      },
-      created_at: new Date().toISOString()
-    };
-
-    const { error: retrainingError } = await supabase
-      .from('retraining_data')
-      .insert(retrainingData);
-
-    if (retrainingError) {
-      console.error('Supabase error during retraining data creation:', {
-        error: retrainingError,
-        retrainingData: { ...retrainingData, image_url: '[REDACTED]' }
-      });
-      // Don't throw here, as the detection was already created
-    }
-
-    return detectionData;
-  } catch (err) {
-    console.error('Unexpected error during detection creation:', {
-      error: err,
-      detection: { ...detection, image_url: '[REDACTED]' }
-    });
-    throw err;
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error creating detection:', error);
+    throw error;
   }
 }
 
@@ -311,6 +264,7 @@ export async function getDetectionsByUser(userId: string) {
         description: obj.description ?? null,
         suggestion: obj.suggestion ? parseSuggestionFragments(obj.suggestion) : [],
         risk_lvl: obj.risk_lvl ?? null,
+        damage_level: obj.damage_level ?? null,
         detection_source: obj.detection_source ?? null
       })),
       created_at: scan.created_at
@@ -343,48 +297,66 @@ export async function getDetectionById(id: string) {
 }
 
 export async function deleteDetection(id: string) {
-  const { error } = await supabase
-    .from('objects')
-    .delete()
-    .eq('id', id);
-  if (error) throw error;
-  return true;
+  try {
+    // Delete retraining data first (if exists)
+    const { error: retrainingError } = await supabase
+      .from('retraining_data')
+      .delete()
+      .eq('object_id', id);
+    
+    if (retrainingError) {
+      console.error('Error deleting retraining data:', retrainingError);
+      throw retrainingError;
+    }
+
+    // Delete validation history (if exists)
+    const { error: validationError } = await supabase
+      .from('validation_history')
+      .delete()
+      .eq('object_id', id);
+    
+    if (validationError) {
+      console.error('Error deleting validation history:', validationError);
+      throw validationError;
+    }
+
+    // Finally delete the detection
+    const { error: detectionError } = await supabase
+      .from('objects')
+      .delete()
+      .eq('id', id);
+    
+    if (detectionError) {
+      console.error('Error deleting detection:', detectionError);
+      throw detectionError;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in deleteDetection:', error);
+    throw error;
+  }
 }
 
 export async function updateDetection(id: string, fields: Partial<Detection>) {
-  // First get the detection to verify user_id
-  const { data: detection, error: getError } = await supabase
-    .from('objects')
-    .select('*')
-    .eq('id', id)
-    .single();
-  
-  if (getError) throw getError;
-  
-  // Verify if the user_id in the request matches the detection's user_id
-  if (fields.user_id && fields.user_id !== detection.user_id) {
-    throw new Error('Unauthorized: User ID does not match detection owner');
+  try {
+    const { data, error } = await supabase
+      .from('objects')
+      .update({
+        ...fields,
+        damage_level: fields.damage_level || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating detection:', error);
+    throw error;
   }
-  
-  // Update object fields
-  const { data, error } = await supabase
-    .from('objects')
-    .update(fields)
-    .eq('id', id)
-    .select()
-    .single();
-    
-  if (error) throw error;
-  
-  // Transform suggestion from pipe-separated string to array
-  if (data) {
-    return {
-      ...data,
-      suggestion: data.suggestion ? parseSuggestionFragments(data.suggestion) : []
-    };
-  }
-  
-  return data;
 }
 
 export async function getDetectionsByScan(scanId: string) {

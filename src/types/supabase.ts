@@ -79,6 +79,7 @@ export interface Database {
           description: string | null
           suggestion: string[]
           risk_lvl: number | null
+          damage_level: number | null
           detection_source: string
           is_validated: boolean
           validated_by: string | null
@@ -96,6 +97,7 @@ export interface Database {
           description?: string | null
           suggestion: string[]
           risk_lvl?: number | null
+          damage_level?: number | null
           detection_source: string
           is_validated?: boolean
           validated_by?: string | null
@@ -113,6 +115,7 @@ export interface Database {
           description?: string | null
           suggestion?: string[]
           risk_lvl?: number | null
+          damage_level?: number | null
           detection_source?: string
           is_validated?: boolean
           validated_by?: string | null

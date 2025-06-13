@@ -59,6 +59,7 @@ interface AIPrediction {
   bbox: number[];
   suggestion: string[];
   risk_lvl: number;
+  damage_level: number;
   detection_source: string;
 }
 
@@ -137,6 +138,7 @@ export const createDetection = async (req: AuthRequest, res: Response, next: Nex
         description: prediction.description || null,
         suggestion: Array.isArray(prediction.suggestion) ? prediction.suggestion : [],
         risk_lvl: prediction.risk_lvl || null,
+        damage_level: prediction.damage_level || null,
         detection_source: prediction.detection_source || 'ai',
         is_validated: false,
         validated_by: null,
@@ -169,6 +171,7 @@ export const createDetection = async (req: AuthRequest, res: Response, next: Nex
         description: null,
         suggestion: [],
         risk_lvl: null,
+        damage_level: null,
         detection_source: 'manual',
         is_validated: false,
         validated_by: null,
@@ -190,6 +193,7 @@ export const createDetection = async (req: AuthRequest, res: Response, next: Nex
         confidence: result.confidence,
         regression_result: result.regression_result,
         risk_lvl: result.risk_lvl,
+        damage_level: result.damage_level,
         detection_source: result.detection_source,
         description: result.description,
         suggestion: result.suggestion,
@@ -267,7 +271,7 @@ export const validateDetection = async (req: AuthRequest, res: Response, next: N
     }
 
     // Accept corrected fields
-    const { category, corrected_price, bbox_coordinates } = req.body;
+    const { category, corrected_price, bbox_coordinates, damage_level } = req.body;
 
     // 1. Fetch detection (object)
     const detection = await detectionService.getDetectionById(objectId);
@@ -282,12 +286,14 @@ export const validateDetection = async (req: AuthRequest, res: Response, next: N
       validated_by: string;
       updated_at: string;
       category?: string;
+      damage_level?: number;
     } = {
       is_validated: true,
       validated_by: userId,
       updated_at: new Date().toISOString()
     };
     if (category) detectionUpdate.category = category;
+    if (damage_level !== undefined) detectionUpdate.damage_level = damage_level;
     await detectionService.updateDetection(objectId, detectionUpdate);
 
     // 3. Update retraining_data
@@ -314,7 +320,7 @@ export const validateDetection = async (req: AuthRequest, res: Response, next: N
         previous_category: detection.category,
         new_category: category || detection.category,
         previous_confidence: detection.confidence,
-        new_confidence: detection.confidence, // or new value if changed
+        new_confidence: detection.confidence,
         notes: '',
         created_at: new Date().toISOString()
       });

@@ -10,7 +10,8 @@ import {
   getArticlesByStatus,
   publishArticle,
   archiveArticle,
-  deleteArticle
+  deleteArticle,
+  getById
 } from '../controllers/articleController';
 
 const router = Router();
@@ -205,6 +206,7 @@ const router = Router();
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/', isAuthenticated, getAll);
+router.get('/:id', isAuthenticated, getById);
 router.post('/', isAuthenticated, createArticle);
 
 /**

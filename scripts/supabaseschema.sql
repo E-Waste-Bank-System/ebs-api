@@ -36,7 +36,6 @@ create table public.articles (
   author_id uuid references public.profiles(id),
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  published_at timestamptz,
   deleted_at timestamptz -- For soft deletes
 );
 
@@ -76,6 +75,7 @@ create table public.objects (
   description text,
   suggestions text[], -- Using array type for better querying
   risk_level integer check (risk_level >= 1 and risk_level <= 10),
+  damage_level integer check (damage_level >= 1 and damage_level <= 5),
   metadata jsonb, -- For additional object-specific data
   is_validated boolean not null default false,
   validated_at timestamptz,
@@ -92,6 +92,7 @@ create index idx_objects_category on public.objects(category);
 create index idx_objects_created_at on public.objects(created_at);
 create index idx_objects_is_validated on public.objects(is_validated);
 create index idx_objects_confidence on public.objects(confidence);
+create index idx_objects_damage_level on public.objects(damage_level);
 
 -- 5. Ewaste Table (finalized/confirmed e-waste records)
 create table public.ewaste (
@@ -129,6 +130,8 @@ create table public.retraining_data (
   corrected_category text,
   original_price float,
   corrected_price float,
+  original_damage_level integer check (original_damage_level >= 1 and original_damage_level <= 5),
+  corrected_damage_level integer check (corrected_damage_level >= 1 and corrected_damage_level <= 5),
   is_verified boolean not null default false,
   verified_at timestamptz,
   verified_by uuid references public.profiles(id),
@@ -147,6 +150,7 @@ create index idx_retraining_data_corrected_category on public.retraining_data(co
 create index idx_retraining_data_is_verified on public.retraining_data(is_verified);
 create index idx_retraining_data_created_at on public.retraining_data(created_at);
 create index idx_retraining_data_model_version on public.retraining_data(model_version);
+create index idx_retraining_data_damage_level on public.retraining_data(corrected_damage_level);
 
 -- 7. Validation History Table (for audit trails)
 create table public.validation_history (
@@ -158,6 +162,8 @@ create table public.validation_history (
   new_category text,
   previous_confidence float,
   new_confidence float,
+  previous_damage_level integer check (previous_damage_level >= 1 and previous_damage_level <= 5),
+  new_damage_level integer check (new_damage_level >= 1 and new_damage_level <= 5),
   notes text,
   created_at timestamptz default now()
 );
@@ -268,3 +274,24 @@ create policy "Users can view their own retraining data"
 create policy "Users can create their own retraining data"
   on public.retraining_data for insert
   with check (auth.uid() = user_id);
+
+-- Add RLS policies for articles
+create policy "Service role can read all articles"
+  on public.articles for select
+  using (true);
+
+create policy "Users can view their own articles"
+  on public.articles for select
+  using (auth.uid() = author_id);
+
+create policy "Users can create their own articles"
+  on public.articles for insert
+  with check (auth.uid() = author_id);
+
+create policy "Users can update their own articles"
+  on public.articles for update
+  using (auth.uid() = author_id);
+
+create policy "Users can delete their own articles"
+  on public.articles for delete
+  using (auth.uid() = author_id);

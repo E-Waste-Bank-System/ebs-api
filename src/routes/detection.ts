@@ -6,7 +6,8 @@ import {
   getDetectionsByUser,
   getDetectionsByScan,
   validateDetection,
-  getAllDetections
+  getAllDetections,
+  deleteDetection
 } from '../controllers/detectionController';
 import validateQuery from '../middlewares/validateQuery';
 import { z } from 'zod';
@@ -484,6 +485,47 @@ router.get('/scan/:scanId', isAuthenticated, getDetectionsByScan);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post('/:objectId/validate', isAuthenticated, validateDetection);
+
+/**
+ * @swagger
+ * /detections/{id}:
+ *   delete:
+ *     summary: Delete a detection
+ *     description: Delete a specific detection by its ID
+ *     tags: [Detections]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Detection ID
+ *     responses:
+ *       204:
+ *         description: Detection deleted successfully
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: Detection not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.delete('/:id', isAuthenticated, deleteDetection);
 
 /**
  * @swagger

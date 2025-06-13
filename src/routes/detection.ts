@@ -1,18 +1,12 @@
 import { Router } from 'express';
-import isAuthenticated from '../middlewares/auth';
-import upload from '../middlewares/upload';
-import {
-  createDetection,
-  getDetectionsByUser,
-  getDetectionsByScan,
-  validateDetection,
-  getAllDetections,
-  deleteDetection
-} from '../controllers/detectionController';
-import validateQuery from '../middlewares/validateQuery';
-import { z } from 'zod';
+import { Response } from 'express';
+import { AuthRequest } from '../types/auth';
+import { isAuthenticated } from '../middlewares/auth';
+import { asyncHandler } from '../utils/asyncHandler';
+import { DetectionService } from '../services/detectionService';
 
 const router = Router();
+const detectionService = new DetectionService();
 
 /**
  * @swagger
@@ -208,325 +202,6 @@ const router = Router();
  *         created_at: "2023-06-01T12:00:00Z"
  */
 
-const detectionSchema = z.object({
-  category: z.string().min(1),
-  confidence: z.number().min(0).max(1),
-  description: z.string().max(200).optional(),
-  suggestion: z.array(z.string()).max(3).optional(),
-  risk_lvl: z.number().min(1).max(10).optional(),
-});
-
-/**
- * @swagger
- * /detections:
- *   post:
- *     summary: Create a new detection
- *     description: Upload an image and create a new detection with AI analysis
- *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         multipart/form-data:
- *           schema:
- *             type: object
- *             properties:
- *               image:
- *                 type: string
- *                 format: binary
- *                 description: Image file to analyze
- *     responses:
- *       201:
- *         description: Detection created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   $ref: '#/components/schemas/Detection'
- *                 message:
- *                   type: string
- *       400:
- *         description: No image file provided
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/', isAuthenticated, upload.single('image'), createDetection);
-
-/**
- * @swagger
- * /detections/user:
- *   get:
- *     summary: Get detections by user
- *     description: Retrieve all detections for the authenticated user
- *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *         description: Page number
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *         description: Number of items per page
- *       - in: query
- *         name: category
- *         schema:
- *           type: string
- *         description: Filter by category
- *       - in: query
- *         name: is_validated
- *         schema:
- *           type: boolean
- *         description: Filter by validation status
- *     responses:
- *       200:
- *         description: List of detections
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/DetectionScanGroup'
- *                 total:
- *                   type: integer
- *                   description: Total number of detections
- *                 page:
- *                   type: integer
- *                   description: Current page number
- *                 limit:
- *                   type: integer
- *                   description: Number of items per page
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/user', isAuthenticated, getDetectionsByUser);
-
-/**
- * @swagger
- * /detections/scan/{scanId}:
- *   get:
- *     summary: Get detections by scan ID
- *     description: Retrieve all detections for a specific scan session
- *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: scanId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Scan ID
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *         description: Page number
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *         description: Number of items per page
- *       - in: query
- *         name: category
- *         schema:
- *           type: string
- *         description: Filter by category
- *       - in: query
- *         name: is_validated
- *         schema:
- *           type: boolean
- *         description: Filter by validation status
- *     responses:
- *       200:
- *         description: List of detections for the scan
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Detection'
- *                 total:
- *                   type: integer
- *                   description: Total number of detections
- *                 page:
- *                   type: integer
- *                   description: Current page number
- *                 limit:
- *                   type: integer
- *                   description: Number of items per page
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Scan not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.get('/scan/:scanId', isAuthenticated, getDetectionsByScan);
-
-/**
- * @swagger
- * /detections/{objectId}/validate:
- *   post:
- *     summary: Validate a detection
- *     description: Validate or update a detection's category and confidence
- *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: objectId
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Object ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               category:
- *                 type: string
- *                 description: Corrected category
- *               confidence:
- *                 type: number
- *                 format: float
- *                 minimum: 0
- *                 maximum: 1
- *                 description: Updated confidence score
- *     responses:
- *       200:
- *         description: Detection validated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   $ref: '#/components/schemas/Detection'
- *                 message:
- *                   type: string
- *       400:
- *         description: Invalid validation data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Detection not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/:objectId/validate', isAuthenticated, validateDetection);
-
-/**
- * @swagger
- * /detections/{id}:
- *   delete:
- *     summary: Delete a detection
- *     description: Delete a specific detection by its ID
- *     tags: [Detections]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Detection ID
- *     responses:
- *       204:
- *         description: Detection deleted successfully
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Detection not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.delete('/:id', isAuthenticated, deleteDetection);
-
 /**
  * @swagger
  * /detections:
@@ -596,7 +271,50 @@ router.delete('/:id', isAuthenticated, deleteDetection);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', isAuthenticated, getAllDetections);
+
+// Get all detections
+router.get('/', isAuthenticated, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  const result = await detectionService.findAll();
+  res.json(result);
+}));
+
+// Get detection by ID
+router.get('/:id', isAuthenticated, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const detection = await detectionService.findById(id);
+  if (!detection) {
+    res.status(404).json({ message: 'Detection not found' });
+    return;
+  }
+  res.json(detection);
+}));
+
+// Create detection
+router.post('/', isAuthenticated, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  const detection = await detectionService.create({
+    ...req.body,
+    user_id: req.user!.id
+  });
+  res.status(201).json(detection);
+}));
+
+// Update detection
+router.put('/:id', isAuthenticated, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const detection = await detectionService.update(id, req.body);
+  if (!detection) {
+    res.status(404).json({ message: 'Detection not found' });
+    return;
+  }
+  res.json(detection);
+}));
+
+// Delete detection
+router.delete('/:id', isAuthenticated, asyncHandler(async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  await detectionService.delete(id);
+  res.status(204).send();
+}));
 
 // Unique categories endpoint
 router.get('/categories', async (req, res, next) => {

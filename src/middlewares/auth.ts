@@ -1,24 +1,51 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { verifyToken, TokenPayload } from '../utils/token';
+import { Response, NextFunction } from 'express';
+import { supabase } from '../config/supabase';
+import { AuthRequest } from '../types/auth';
 
-export interface AuthRequest extends Request {
-  user?: TokenPayload;
-}
-
-const requireAuth: RequestHandler = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ message: 'Unauthorized' });
-    return;
-  }
-  const token = authHeader.split(' ')[1];
+export const isAuthenticated = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const payload = verifyToken(token);
-    (req as AuthRequest).user = payload;
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      res.status(401).json({ error: 'No authorization header' });
+      return;
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile) {
+      res.status(401).json({ error: 'Profile not found' });
+      return;
+    }
+
+    req.user = {
+      id: user.id,
+      email: user.email || '',
+      role: profile.role
+    };
+
     next();
-  } catch {
-    res.status(401).json({ message: 'Invalid token' });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+    return;
   }
 };
 
-export default requireAuth;
+export const isAdmin = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  if (!req.user || req.user.role !== 'admin') {
+    res.status(403).json({ error: 'Admin access required' });
+    return;
+  }
+  next();
+};

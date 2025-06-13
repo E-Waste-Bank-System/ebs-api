@@ -1,10 +1,56 @@
-import { ScanModel } from '../models/scan';
-import { Database } from '../types/supabase';
+import { BaseModel } from '../models/baseModel';
+import { supabase } from '../config/supabase';
 import logger from '../utils/logger';
 
-type Scan = Database['public']['Tables']['scans']['Row'];
-type ScanInsert = Database['public']['Tables']['scans']['Insert'];
-type ScanUpdate = Database['public']['Tables']['scans']['Update'];
+export type ScanStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface Scan {
+  id: string;
+  user_id: string;
+  status: ScanStatus;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  completed_at: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export class ScanModel extends BaseModel<Scan> {
+  constructor() {
+    super('scans');
+  }
+
+  async findByUserId(userId: string): Promise<Scan[]> {
+    const { data, error } = await this.supabase
+      .from(this.tableName)
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (error) throw error;
+    return data as Scan[];
+  }
+
+  async findByDateRange(startDate: string, endDate: string): Promise<Scan[]> {
+    const { data, error } = await this.supabase
+      .from(this.tableName)
+      .select('*')
+      .gte('created_at', startDate)
+      .lte('created_at', endDate);
+    
+    if (error) throw error;
+    return data as Scan[];
+  }
+
+  async findByStatus(status: ScanStatus): Promise<Scan[]> {
+    const { data, error } = await this.supabase
+      .from(this.tableName)
+      .select('*')
+      .eq('status', status);
+    
+    if (error) throw error;
+    return data as Scan[];
+  }
+}
 
 export class ScanService {
   private model: ScanModel;
@@ -13,75 +59,38 @@ export class ScanService {
     this.model = new ScanModel();
   }
 
-  async getScan(id: string): Promise<Scan | null> {
-    try {
-      return await this.model.findById(id);
-    } catch (error) {
-      logger.error('Error getting scan:', error);
-      throw error;
-    }
+  async getAllScans(): Promise<Scan[]> {
+    return await this.model.findAll();
   }
 
-  async getScans(): Promise<Scan[]> {
-    try {
-      return await this.model.findAll();
-    } catch (error) {
-      logger.error('Error getting scans:', error);
-      throw error;
-    }
+  async getScanById(id: string): Promise<Scan> {
+    return await this.model.findById(id);
   }
 
-  async createScan(scan: ScanInsert): Promise<Scan> {
-    try {
-      return await this.model.create(scan);
-    } catch (error) {
-      logger.error('Error creating scan:', error);
-      throw error;
-    }
+  async createScan(scan: Partial<Scan>): Promise<Scan> {
+    return await this.model.create(scan);
   }
 
-  async updateScan(id: string, scan: ScanUpdate): Promise<Scan> {
-    try {
-      return await this.model.update(id, scan);
-    } catch (error) {
-      logger.error('Error updating scan:', error);
-      throw error;
-    }
+  async updateScan(id: string, scan: Partial<Scan>): Promise<Scan> {
+    return await this.model.update(id, scan);
   }
 
-  async deleteScan(id: string): Promise<void> {
-    try {
-      await this.model.delete(id);
-    } catch (error) {
-      logger.error('Error deleting scan:', error);
-      throw error;
-    }
+  async deleteScan(id: string): Promise<boolean> {
+    return await this.model.delete(id);
   }
 
-  async getScansByUser(userId: string): Promise<Scan[]> {
-    try {
-      return await this.model.findByUserId(userId);
-    } catch (error) {
-      logger.error('Error getting scans by user:', error);
-      throw error;
-    }
-  }
-
-  async getScansByStatus(status: string): Promise<Scan[]> {
-    try {
-      return await this.model.findByStatus(status);
-    } catch (error) {
-      logger.error('Error getting scans by status:', error);
-      throw error;
-    }
+  async getScansByUserId(userId: string): Promise<Scan[]> {
+    return await this.model.findByUserId(userId);
   }
 
   async getScansByDateRange(startDate: Date, endDate: Date): Promise<Scan[]> {
-    try {
-      return await this.model.findByDateRange(startDate, endDate);
-    } catch (error) {
-      logger.error('Error getting scans by date range:', error);
-      throw error;
-    }
+    return await this.model.findByDateRange(
+      startDate.toISOString(),
+      endDate.toISOString()
+    );
+  }
+
+  async getScansByStatus(status: ScanStatus): Promise<Scan[]> {
+    return await this.model.findByStatus(status);
   }
 } 

@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { isAuthenticated } from '../middlewares/role';
+import { isAuthenticated } from '../middlewares/auth';
+import { validateQuery } from '../middlewares/validateQuery';
+import { retrainingSchema, querySchema } from '../schemas/retraining';
 import * as retrainingController from '../controllers/retrainingController';
-import validateQuery from '../middlewares/validateQuery';
-import { z } from 'zod';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
@@ -141,30 +142,6 @@ const router = Router();
  *         updated_at: "2023-06-01T12:30:00Z"
  */
 
-const retrainingSchema = z.object({
-  image_url: z.string().url(),
-  original_category: z.string().min(1),
-  bbox_coordinates: z.object({
-    x: z.number(),
-    y: z.number(),
-    width: z.number(),
-    height: z.number(),
-  }),
-  confidence_score: z.number().min(0).max(1),
-  model_version: z.string().min(1),
-  user_id: z.string().uuid(),
-  object_id: z.string().uuid(),
-});
-
-const querySchema = z.object({
-  page: z.string().regex(/^\d+$/).transform(Number).optional(),
-  limit: z.string().regex(/^\d+$/).transform(Number).optional(),
-  is_verified: z.string().transform(val => val === 'true').optional(),
-  model_version: z.string().optional(),
-  confidence_below: z.string().transform(Number).optional(),
-  category: z.string().optional(),
-});
-
 /**
  * @swagger
  * /retraining:
@@ -264,7 +241,11 @@ const querySchema = z.object({
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/', isAuthenticated, validateQuery(retrainingSchema), retrainingController.createRetrainingEntry);
+router.post('/', 
+  isAuthenticated, 
+  validateQuery(retrainingSchema), 
+  asyncHandler(retrainingController.createRetrainingEntry)
+);
 
 /**
  * @swagger
@@ -330,7 +311,11 @@ router.post('/', isAuthenticated, validateQuery(retrainingSchema), retrainingCon
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', isAuthenticated, validateQuery(querySchema), retrainingController.getAllRetrainingData);
+router.get('/', 
+  isAuthenticated, 
+  validateQuery(querySchema), 
+  asyncHandler(retrainingController.getAllRetrainingData)
+);
 
 /**
  * @swagger
@@ -370,7 +355,10 @@ router.get('/', isAuthenticated, validateQuery(querySchema), retrainingControlle
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/unverified/samples', isAuthenticated, retrainingController.getUnverifiedSamples);
+router.get('/unverified/samples', 
+  isAuthenticated, 
+  asyncHandler(retrainingController.getUnverifiedSamples)
+);
 
 /**
  * @swagger
@@ -403,7 +391,10 @@ router.get('/unverified/samples', isAuthenticated, retrainingController.getUnver
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/export/data', isAuthenticated, retrainingController.exportVerifiedData);
+router.get('/export/data', 
+  isAuthenticated, 
+  asyncHandler(retrainingController.exportVerifiedData)
+);
 
 /**
  * @swagger
@@ -451,7 +442,10 @@ router.get('/export/data', isAuthenticated, retrainingController.exportVerifiedD
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/:id', isAuthenticated, retrainingController.getRetrainingDataById);
+router.get('/:id', 
+  isAuthenticated, 
+  asyncHandler(retrainingController.getRetrainingDataById)
+);
 
 /**
  * @swagger
@@ -499,7 +493,10 @@ router.get('/:id', isAuthenticated, retrainingController.getRetrainingDataById);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/object/:object_id', isAuthenticated, retrainingController.getRetrainingDataByObjectId);
+router.get('/object/:object_id', 
+  isAuthenticated, 
+  asyncHandler(retrainingController.getRetrainingDataByObjectId)
+);
 
 /**
  * @swagger
@@ -570,7 +567,11 @@ router.get('/object/:object_id', isAuthenticated, retrainingController.getRetrai
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', isAuthenticated, validateQuery(retrainingSchema), retrainingController.updateRetrainingData);
+router.put('/:id', 
+  isAuthenticated, 
+  validateQuery(retrainingSchema), 
+  asyncHandler(retrainingController.updateRetrainingData)
+);
 
 /**
  * @swagger
@@ -620,7 +621,10 @@ router.put('/:id', isAuthenticated, validateQuery(retrainingSchema), retrainingC
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/:id/verify', isAuthenticated, retrainingController.verifyRetrainingData);
+router.post('/:id/verify', 
+  isAuthenticated, 
+  asyncHandler(retrainingController.verifyRetrainingData)
+);
 
 /**
  * @swagger
@@ -661,6 +665,9 @@ router.post('/:id/verify', isAuthenticated, retrainingController.verifyRetrainin
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.delete('/:id', isAuthenticated, retrainingController.deleteRetrainingData);
+router.delete('/:id', 
+  isAuthenticated, 
+  asyncHandler(retrainingController.deleteRetrainingData)
+);
 
 export default router;

@@ -1,87 +1,146 @@
-import { EWasteModel } from '../models/ewaste';
-import { Database } from '../types/supabase';
-import logger from '../utils/logger';
+import { supabase } from '../config/supabase';
 
-type EWaste = Database['public']['Tables']['ewaste']['Row'];
-type EWasteInsert = Database['public']['Tables']['ewaste']['Insert'];
-type EWasteUpdate = Database['public']['Tables']['ewaste']['Update'];
+export interface EWaste {
+  id: string;
+  user_id: string;
+  object_id: string;
+  category: string;
+  quantity: number;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Stats {
+  totalItems: number;
+  pendingItems: number;
+  approvedItems: number;
+  rejectedItems: number;
+  recentItems: EWaste[];
+}
+
+export interface DetailedStats extends Stats {
+  userCount: number;
+  categoryBreakdown: Record<string, number>;
+}
 
 export class EWasteService {
-  private model: EWasteModel;
-
-  constructor() {
-    this.model = new EWasteModel();
+  async findById(id: string): Promise<EWaste | null> {
+    const { data, error } = await supabase
+      .from('ewaste')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    return data;
   }
 
-  async getEWaste(id: string): Promise<EWaste | null> {
-    try {
-      return await this.model.findById(id);
-    } catch (error) {
-      logger.error('Error getting e-waste:', error);
-      throw error;
-    }
+  async findAll(): Promise<EWaste[]> {
+    const { data, error } = await supabase
+      .from('ewaste')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data;
   }
 
-  async getEWasteList(): Promise<EWaste[]> {
-    try {
-      return await this.model.findAll();
-    } catch (error) {
-      logger.error('Error getting e-waste list:', error);
-      throw error;
-    }
+  async create(ewaste: Omit<EWaste, 'id' | 'created_at' | 'updated_at'>): Promise<EWaste> {
+    const { data, error } = await supabase
+      .from('ewaste')
+      .insert(ewaste)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   }
 
-  async createEWaste(ewaste: EWasteInsert): Promise<EWaste> {
-    try {
-      return await this.model.create(ewaste);
-    } catch (error) {
-      logger.error('Error creating e-waste:', error);
-      throw error;
-    }
+  async update(id: string, ewaste: Partial<EWaste>): Promise<EWaste | null> {
+    const { data, error } = await supabase
+      .from('ewaste')
+      .update(ewaste)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
   }
 
-  async updateEWaste(id: string, ewaste: EWasteUpdate): Promise<EWaste> {
-    try {
-      return await this.model.update(id, ewaste);
-    } catch (error) {
-      logger.error('Error updating e-waste:', error);
-      throw error;
-    }
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('ewaste')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
   }
 
-  async deleteEWaste(id: string): Promise<void> {
-    try {
-      await this.model.delete(id);
-    } catch (error) {
-      logger.error('Error deleting e-waste:', error);
-      throw error;
-    }
+  async findByUserId(userId: string): Promise<EWaste[]> {
+    const { data, error } = await supabase
+      .from('ewaste')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data;
   }
 
-  async getEWasteByCategory(category: string): Promise<EWaste[]> {
-    try {
-      return await this.model.findByCategory(category);
-    } catch (error) {
-      logger.error('Error getting e-waste by category:', error);
-      throw error;
-    }
+  async findByCategory(category: string): Promise<EWaste[]> {
+    const { data, error } = await supabase
+      .from('ewaste')
+      .select('*')
+      .eq('category', category)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data;
   }
 
-  async getEWasteByUser(userId: string): Promise<EWaste[]> {
-    try {
-      return await this.model.findByUserId(userId);
-    } catch (error) {
-      logger.error('Error getting e-waste by user:', error);
-      throw error;
-    }
+  async getStats(): Promise<Stats> {
+    const { data: ewaste, error } = await supabase
+      .from('ewaste')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+
+    return {
+      totalItems: ewaste.length,
+      pendingItems: ewaste.filter(item => item.status === 'pending').length,
+      approvedItems: ewaste.filter(item => item.status === 'approved').length,
+      rejectedItems: ewaste.filter(item => item.status === 'rejected').length,
+      recentItems: ewaste.slice(0, 5)
+    };
   }
 
-  async getEWasteByDateRange(startDate: Date, endDate: Date): Promise<EWaste[]> {
-    try {
-      return await this.model.findByDateRange(startDate, endDate);
-    } catch (error) {
-      logger.error('Error getting e-waste by date range:', error);
-      throw error;
-    }
+  async getDetailedStats(): Promise<DetailedStats> {
+    const { data: ewaste, error } = await supabase
+      .from('ewaste')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+
+    const uniqueUsers = new Set(ewaste.map(item => item.user_id));
+    const categoryBreakdown = ewaste.reduce((acc, item) => {
+      acc[item.category] = (acc[item.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      totalItems: ewaste.length,
+      pendingItems: ewaste.filter(item => item.status === 'pending').length,
+      approvedItems: ewaste.filter(item => item.status === 'approved').length,
+      rejectedItems: ewaste.filter(item => item.status === 'rejected').length,
+      recentItems: ewaste.slice(0, 5),
+      userCount: uniqueUsers.size,
+      categoryBreakdown
+    };
   }
-} 
+}
+
+export const ewasteService = new EWasteService(); 

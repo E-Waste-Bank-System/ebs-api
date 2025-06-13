@@ -1,20 +1,14 @@
-import { AnyZodObject } from 'zod';
-import { RequestHandler } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { ZodSchema } from 'zod';
 
-export default function validateQuery(schema: AnyZodObject): RequestHandler {
-  return (req, res, next) => {
+export function validateQuery(schema: ZodSchema) {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // Parse and validate the query parameters without reassigning req.query
-      const validatedQuery = schema.parse(req.query);
-      
-      // Instead of reassigning req.query directly (which would fail),
-      // we'll add the validated data to the request object under a new property
-      (req as any).validatedQuery = validatedQuery;
-      
+      const validatedData = await schema.parseAsync(req.query);
+      req.query = validatedData;
       next();
-    } catch (err: any) {
-      res.status(400).json({ message: err.errors || err.message });
-      return;
+    } catch (error) {
+      res.status(400).json({ message: 'Invalid query parameters', error });
     }
   };
 }

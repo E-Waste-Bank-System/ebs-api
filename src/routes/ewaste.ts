@@ -1,17 +1,9 @@
-import express from 'express';
-import { isAdmin } from '../middleware/auth';
-import {
-  getEWaste,
-  getEWasteList,
-  createEWaste,
-  updateEWaste,
-  deleteEWaste,
-  validateEWaste,
-  getEWasteByCategory,
-  getEWasteByUser
-} from '../controllers/ewasteController';
+import { Router } from 'express';
+import { isAuthenticated, isAdmin } from '../middlewares/auth';
+import { ewasteController } from '../controllers/ewasteController';
+import { asyncHandler } from '../utils/asyncHandler';
 
-const router = express.Router();
+const router = Router();
 
 /**
  * @swagger
@@ -31,7 +23,7 @@ const router = express.Router();
  *       404:
  *         description: E-waste not found
  */
-router.get('/:id', getEWaste);
+router.get('/:id', asyncHandler(ewasteController.getById));
 
 /**
  * @swagger
@@ -73,7 +65,7 @@ router.get('/:id', getEWaste);
  *       200:
  *         description: List of e-waste retrieved successfully
  */
-router.get('/', getEWasteList);
+router.get('/', asyncHandler(ewasteController.getAll));
 
 /**
  * @swagger
@@ -105,7 +97,7 @@ router.get('/', getEWasteList);
  *       401:
  *         description: Unauthorized
  */
-router.post('/', createEWaste);
+router.post('/', isAuthenticated, asyncHandler(ewasteController.create));
 
 /**
  * @swagger
@@ -142,7 +134,7 @@ router.post('/', createEWaste);
  *       404:
  *         description: E-waste not found
  */
-router.put('/:id', updateEWaste);
+router.put('/:id', isAuthenticated, asyncHandler(ewasteController.update));
 
 /**
  * @swagger
@@ -166,45 +158,7 @@ router.put('/:id', updateEWaste);
  *       404:
  *         description: E-waste not found
  */
-router.delete('/:id', deleteEWaste);
-
-/**
- * @swagger
- * /api/ewaste/{id}/validate:
- *   post:
- *     summary: Validate e-waste entry
- *     tags: [E-Waste]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - status
- *             properties:
- *               status:
- *                 type: string
- *                 enum: [approved, rejected]
- *     responses:
- *       200:
- *         description: E-waste validated successfully
- *       400:
- *         description: Invalid status
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: E-waste not found
- */
-router.post('/:id/validate', isAdmin, validateEWaste);
+router.delete('/:id', isAuthenticated, asyncHandler(ewasteController.delete));
 
 /**
  * @swagger
@@ -222,7 +176,7 @@ router.post('/:id/validate', isAdmin, validateEWaste);
  *       200:
  *         description: List of e-waste by category retrieved successfully
  */
-router.get('/category/:category', getEWasteByCategory);
+router.get('/category/:category', asyncHandler(ewasteController.getByCategory));
 
 /**
  * @swagger
@@ -238,6 +192,34 @@ router.get('/category/:category', getEWasteByCategory);
  *       401:
  *         description: Unauthorized
  */
-router.get('/user', getEWasteByUser);
+router.get('/user/items', isAuthenticated, asyncHandler(ewasteController.getByUserId));
+
+/**
+ * @swagger
+ * /api/ewaste/stats/basic:
+ *   get:
+ *     summary: Get basic e-waste stats
+ *     tags: [E-Waste]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Basic e-waste stats retrieved successfully
+ */
+router.get('/stats/basic', isAdmin, asyncHandler(ewasteController.getStats));
+
+/**
+ * @swagger
+ * /api/ewaste/stats/detailed:
+ *   get:
+ *     summary: Get detailed e-waste stats
+ *     tags: [E-Waste]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Detailed e-waste stats retrieved successfully
+ */
+router.get('/stats/detailed', isAdmin, asyncHandler(ewasteController.getDetailedStats));
 
 export default router; 

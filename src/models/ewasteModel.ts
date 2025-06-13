@@ -5,93 +5,121 @@ type EWaste = Database['public']['Tables']['ewaste']['Row'];
 type EWasteInsert = Database['public']['Tables']['ewaste']['Insert'];
 type EWasteUpdate = Database['public']['Tables']['ewaste']['Update'];
 
-export class EWasteModel extends BaseModel {
-  protected tableName = 'ewaste';
+export interface Ewaste {
+  id: string;
+  user_id: string;
+  category: string;
+  description: string;
+  condition: string;
+  damage_level: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  validated: boolean;
+  object_id: string;
+  quantity: number;
+  status: 'pending' | 'approved' | 'rejected';
+}
 
-  async findById(id: string): Promise<EWaste | null> {
+export class EwasteModel extends BaseModel<Ewaste> {
+  constructor() {
+    super('ewaste');
+  }
+
+  async findById(id: string): Promise<Ewaste> {
     const { data, error } = await this.supabase
       .from(this.tableName)
       .select('*')
       .eq('id', id)
       .single();
-
+    
     if (error) throw error;
-    return data;
+    if (!data) throw new Error('Ewaste not found');
+    return data as Ewaste;
   }
 
-  async findAll(): Promise<EWaste[]> {
+  async findAll(): Promise<Ewaste[]> {
     const { data, error } = await this.supabase
       .from(this.tableName)
-      .select('*')
-      .order('created_at', { ascending: false });
-
+      .select('*');
+    
     if (error) throw error;
-    return data;
+    return data as Ewaste[];
   }
 
-  async create(ewaste: EWasteInsert): Promise<EWaste> {
+  async create(ewaste: Partial<Ewaste>): Promise<Ewaste> {
     const { data, error } = await this.supabase
       .from(this.tableName)
       .insert(ewaste)
       .select()
       .single();
-
+    
     if (error) throw error;
-    return data;
+    return data as Ewaste;
   }
 
-  async update(id: string, ewaste: EWasteUpdate): Promise<EWaste> {
+  async update(id: string, ewaste: Partial<Ewaste>): Promise<Ewaste> {
     const { data, error } = await this.supabase
       .from(this.tableName)
       .update(ewaste)
       .eq('id', id)
       .select()
       .single();
-
+    
     if (error) throw error;
-    return data;
+    return data as Ewaste;
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string): Promise<boolean> {
     const { error } = await this.supabase
       .from(this.tableName)
       .delete()
       .eq('id', id);
-
+    
     if (error) throw error;
+    return true;
   }
 
-  async findByCategory(category: string): Promise<EWaste[]> {
+  async findByUserId(userId: string): Promise<Ewaste[]> {
     const { data, error } = await this.supabase
       .from(this.tableName)
       .select('*')
-      .eq('category', category)
-      .order('created_at', { ascending: false });
-
+      .eq('user_id', userId);
+    
     if (error) throw error;
-    return data;
+    return data as Ewaste[];
   }
 
-  async findByUserId(userId: string): Promise<EWaste[]> {
+  async findByCategory(category: string): Promise<Ewaste[]> {
     const { data, error } = await this.supabase
       .from(this.tableName)
       .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
+      .eq('category', category);
+    
     if (error) throw error;
-    return data;
+    return data as Ewaste[];
   }
 
-  async findByDateRange(startDate: Date, endDate: Date): Promise<EWaste[]> {
+  async findByDateRange(startDate: Date, endDate: Date): Promise<Ewaste[]> {
     const { data, error } = await this.supabase
       .from(this.tableName)
       .select('*')
       .gte('created_at', startDate.toISOString())
-      .lte('created_at', endDate.toISOString())
-      .order('created_at', { ascending: false });
-
+      .lte('created_at', endDate.toISOString());
+    
     if (error) throw error;
-    return data;
+    return data as Ewaste[];
+  }
+
+  async validate(id: string): Promise<Ewaste> {
+    const { data, error } = await this.supabase
+      .from(this.tableName)
+      .update({ validated: true })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as Ewaste;
   }
 } 

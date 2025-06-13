@@ -1,20 +1,19 @@
-import { Router } from 'express';
-import isAuthenticated from '../middlewares/auth';
-import upload from '../middlewares/upload';
+import express, { Router } from 'express';
+import { AuthRequest } from '../types/auth';
+import { isAuthenticated } from '../middlewares/role';
+import { ArticleService } from '../services/articleService';
 import {
-  getAll,
-  createArticle,
-  updateArticle,
   getArticleBySlug,
   getArticlesByAuthor,
   getArticlesByStatus,
-  publishArticle,
-  archiveArticle,
-  deleteArticle,
   getById
 } from '../controllers/articleController';
+import { asyncHandler, asyncAuthHandler } from '../utils/asyncHandler';
+import { Response, NextFunction } from 'express';
+import { supabase } from '../config/supabase';
 
 const router = Router();
+const articleService = new ArticleService();
 
 /**
  * @swagger
@@ -205,9 +204,68 @@ const router = Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/', isAuthenticated, getAll);
-router.get('/:id', isAuthenticated, getById);
-router.post('/', isAuthenticated, createArticle);
+router.get('/', asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const offset = (page - 1) * limit;
+
+  const { data, total } = await articleService.getAll(limit, offset);
+  res.json({ data, total, page, limit });
+}));
+
+router.get('/:id', asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const article = await articleService.getById(id);
+  if (!article) {
+    res.status(404).json({ message: 'Article not found' });
+    return;
+  }
+  res.json(article);
+}));
+
+router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
+  const { title, content, tags } = req.body;
+  const userId = (req as AuthRequest).user?.id;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  const { data: article, error } = await supabase
+    .from('articles')
+    .insert([
+      {
+        title,
+        content,
+        author_id: userId,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ message: error.message });
+    return;
+  }
+
+  // Insert tags if provided
+  if (tags && tags.length > 0) {
+    const { error: tagError } = await supabase
+      .from('tags')
+      .insert(tags.map((tag: string) => ({
+        name: tag,
+        article_id: article.id,
+      })));
+
+    if (tagError) {
+      res.status(500).json({ message: tagError.message });
+      return;
+    }
+  }
+
+  res.status(201).json(article);
+}));
 
 /**
  * @swagger
@@ -354,7 +412,130 @@ router.post('/', isAuthenticated, createArticle);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/:id', isAuthenticated, updateArticle);
+router.put('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { title, content, tags } = req.body;
+  const userId = (req as AuthRequest).user?.id;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  // Update article
+  const { data: article, error } = await supabase
+    .from('articles')
+    .update({
+      title,
+      content,
+    })
+    .eq('id', id)
+    .eq('author_id', userId)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ message: error.message });
+    return;
+  }
+
+  // Update tags if provided
+  if (tags && tags.length > 0) {
+    // Delete existing tags
+    await supabase
+      .from('tags')
+      .delete()
+      .eq('article_id', id);
+
+    // Insert new tags
+    const { error: tagError } = await supabase
+      .from('tags')
+      .insert(tags.map((tag: string) => ({
+        name: tag,
+        article_id: id,
+      })));
+
+    if (tagError) {
+      res.status(500).json({ message: tagError.message });
+      return;
+    }
+  }
+
+  res.json(article);
+}));
+
+router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as AuthRequest).user?.id;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  const { error } = await supabase
+    .from('articles')
+    .delete()
+    .eq('id', id)
+    .eq('author_id', userId);
+
+  if (error) {
+    res.status(500).json({ message: error.message });
+    return;
+  }
+
+  res.status(204).send();
+}));
+
+router.post('/:id/publish', isAuthenticated, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as AuthRequest).user?.id;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  const { data: article, error } = await supabase
+    .from('articles')
+    .update({ published: true })
+    .eq('id', id)
+    .eq('author_id', userId)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ message: error.message });
+    return;
+  }
+
+  res.json(article);
+}));
+
+router.post('/:id/archive', isAuthenticated, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as AuthRequest).user?.id;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  const { data: article, error } = await supabase
+    .from('articles')
+    .update({ archived: true })
+    .eq('id', id)
+    .eq('author_id', userId)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(500).json({ message: error.message });
+    return;
+  }
+
+  res.json(article);
+}));
 
 /**
  * @swagger
@@ -463,7 +644,34 @@ router.get('/slug/:slug', getArticleBySlug);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/author', isAuthenticated, getArticlesByAuthor);
+router.get('/author', isAuthenticated, asyncHandler(async (req, res) => {
+  const userId = (req as AuthRequest).user?.id;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  const { data: articles, error } = await supabase
+    .from('articles')
+    .select(`
+      *,
+      tags (*),
+      author:users (
+        id,
+        name,
+        email
+      )
+    `)
+    .eq('author_id', userId);
+
+  if (error) {
+    res.status(500).json({ message: error.message });
+    return;
+  }
+
+  res.json(articles);
+}));
 
 /**
  * @swagger
@@ -527,146 +735,5 @@ router.get('/author', isAuthenticated, getArticlesByAuthor);
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get('/status/:status', getArticlesByStatus);
-
-/**
- * @swagger
- * /articles/{id}/publish:
- *   post:
- *     summary: Publish article
- *     description: Change article status to published
- *     tags: [Articles]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Article ID
- *     responses:
- *       200:
- *         description: Article published successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   $ref: '#/components/schemas/Article'
- *                 message:
- *                   type: string
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Article not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/:id/publish', isAuthenticated, publishArticle);
-
-/**
- * @swagger
- * /articles/{id}/archive:
- *   post:
- *     summary: Archive article
- *     description: Change article status to archived
- *     tags: [Articles]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Article ID
- *     responses:
- *       200:
- *         description: Article archived successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 data:
- *                   $ref: '#/components/schemas/Article'
- *                 message:
- *                   type: string
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Article not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/:id/archive', isAuthenticated, archiveArticle);
-
-/**
- * @swagger
- * /articles/{id}:
- *   delete:
- *     summary: Delete article
- *     description: Delete an existing article
- *     tags: [Articles]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *           format: uuid
- *         description: Article ID
- *     responses:
- *       204:
- *         description: Article deleted successfully
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Article not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.delete('/:id', isAuthenticated, deleteArticle);
 
 export default router;

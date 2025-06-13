@@ -1,6 +1,9 @@
 import { Router } from 'express';
-import { getDashboardStats, getEwasteStats } from '../controllers/statsController';
-import { isAdmin } from '../middlewares/role';
+import { isAdmin } from '../middlewares/auth';
+import { ewasteService } from '../services/ewaste';
+import { asyncHandler } from '../utils/asyncHandler';
+import { AuthRequest } from '../types/auth';
+import { Response } from 'express';
 
 const router = Router();
 
@@ -60,7 +63,10 @@ const router = Router();
  *       500:
  *         description: Internal server error
  */
-router.get('/dashboard', isAdmin, getDashboardStats);
+router.get('/dashboard', isAdmin, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const stats = await ewasteService.getStats();
+  res.json(stats);
+}));
 
 /**
  * @swagger
@@ -110,6 +116,9 @@ router.get('/dashboard', isAdmin, getDashboardStats);
  *       500:
  *         description: Internal server error
  */
-router.get('/ewaste', isAdmin, getEwasteStats);
+router.get('/ewaste', isAdmin, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const stats = await ewasteService.getDetailedStats();
+  res.json(stats);
+}));
 
 export default router; 

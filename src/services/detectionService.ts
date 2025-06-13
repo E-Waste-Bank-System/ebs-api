@@ -1,4 +1,4 @@
-import supabase from '../utils/supabase';
+import { supabase } from '../config/supabase';
 import { Database } from '../types/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -384,3 +384,70 @@ export async function getDetectionsByScan(scanId: string) {
     throw err;
   }
 }
+
+export interface DetectionData {
+  id: string;
+  user_id: string;
+  object_id: string;
+  category: string;
+  confidence: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export class DetectionService {
+  async findAll(): Promise<DetectionData[]> {
+    const { data, error } = await supabase
+      .from('detections')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async findById(id: string): Promise<DetectionData | null> {
+    const { data, error } = await supabase
+      .from('detections')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async create(detection: Omit<DetectionData, 'id' | 'created_at' | 'updated_at'>): Promise<DetectionData> {
+    const { data, error } = await supabase
+      .from('detections')
+      .insert(detection)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async update(id: string, detection: Partial<DetectionData>): Promise<DetectionData | null> {
+    const { data, error } = await supabase
+      .from('detections')
+      .update(detection)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+
+  async delete(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('detections')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+  }
+}
+
+export const detectionService = new DetectionService();

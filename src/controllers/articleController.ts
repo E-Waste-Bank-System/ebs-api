@@ -1,11 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import * as articleService from '../services/articleService';
+import { articleService, ArticleService } from '../services/articleService';
 import { uploadImage } from '../utils/gcs';
 import logger from '../utils/logger';
 import { getErrorMessage } from '../utils/error-utils';
 import { z } from 'zod';
-import { AuthRequest } from '../middlewares/auth';
+import { AuthRequest } from '../types/auth';
 
 function createSafeFilename(originalFilename: string): string {
   const extension = originalFilename.includes('.') 
@@ -315,3 +315,39 @@ export async function deleteArticle(req: AuthRequest, res: Response, next: NextF
     });
   }
 }
+
+export class ArticleController {
+  private service: ArticleService;
+
+  constructor() {
+    this.service = new ArticleService();
+  }
+
+  async getAll(req: Request, res: Response) {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (page - 1) * limit;
+
+    const { data, total } = await this.service.getAll(limit, offset);
+    return res.json({ data, total, page, limit });
+  }
+
+  async getById(id: string) {
+    return await this.service.getById(id);
+  }
+
+  async create(article: any) {
+    return await this.service.createArticle(article);
+  }
+
+  async update(id: string, article: any) {
+    return await this.service.updateArticle(id, article);
+  }
+
+  async delete(id: string) {
+    return await this.service.deleteArticle(id);
+  }
+}
+
+// Export singleton instance
+export const articleController = new ArticleController();

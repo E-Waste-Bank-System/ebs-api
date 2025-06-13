@@ -1,9 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import * as retrainingService from '../services/retrainingService';
-import { AuthRequest } from '../middlewares/auth';
-import supabase from '../utils/supabase';
+import { AuthRequest } from '../types/auth';
+import { supabase } from '../config/supabase';
 
-export async function createRetrainingEntry(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function createRetrainingEntry(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const {
       image_url,
@@ -43,49 +43,63 @@ export async function createRetrainingEntry(req: Request, res: Response, next: N
   }
 }
 
-export async function getAllRetrainingData(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getAllRetrainingData(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
-    const offset = (page - 1) * limit;
-    
-    const filters = {
-      is_verified: req.query.is_verified === 'true' ? true : 
-                   req.query.is_verified === 'false' ? false : undefined,
-      model_version: req.query.model_version as string,
-      confidence_below: req.query.confidence_below ? 
-                        parseFloat(req.query.confidence_below as string) : undefined,
-      category: req.query.category as string
-    };
+    const { page = '1', limit = '10', status, category, start_date, end_date } = req.query;
+    const offset = (parseInt(page as string) - 1) * parseInt(limit as string);
 
-    const { data, total, last_page } = await retrainingService.getAllRetrainingData(
-      limit,
-      offset,
-      filters
-    );
+    let query = supabase
+      .from('retraining_data')
+      .select('*', { count: 'exact' });
 
+    if (status === 'verified') {
+      query = query.eq('verified', true);
+    } else if (status === 'unverified') {
+      query = query.eq('verified', false);
+    }
+
+    if (category) {
+      query = query.eq('category', category);
+    }
+
+    if (start_date) {
+      query = query.gte('created_at', start_date);
+    }
+
+    if (end_date) {
+      query = query.lte('created_at', end_date);
+    }
+
+    const { data, count, error } = await query
+      .range(offset, offset + parseInt(limit as string) - 1)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
     res.json({
       data,
-      total,
-      current_page: page,
-      last_page,
-      per_page: limit
+      total: count,
+      page: parseInt(page as string),
+      limit: parseInt(limit as string)
     });
   } catch (err) {
     next(err);
   }
 }
 
-export async function getRetrainingDataById(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getRetrainingDataById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    const data = await retrainingService.getRetrainingDataById(id);
-    
+    const { data, error } = await supabase
+      .from('retraining_data')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
     if (!data) {
       res.status(404).json({ message: 'Retraining data not found' });
       return;
     }
-    
     res.json(data);
   } catch (err) {
     next(err);
@@ -95,18 +109,19 @@ export async function getRetrainingDataById(req: Request, res: Response, next: N
 export async function updateRetrainingData(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    const updates = req.body;
-    
-    // Get existing data to check if it exists
-    const existingData = await retrainingService.getRetrainingDataById(id);
-    if (!existingData) {
+    const { data, error } = await supabase
+      .from('retraining_data')
+      .update(req.body)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) {
       res.status(404).json({ message: 'Retraining data not found' });
       return;
     }
-    
-    // Update the data
-    const updated = await retrainingService.updateRetrainingData(id, updates);
-    res.json(updated);
+    res.json(data);
   } catch (err) {
     next(err);
   }
@@ -115,65 +130,78 @@ export async function updateRetrainingData(req: AuthRequest, res: Response, next
 export async function verifyRetrainingData(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    const { corrected_category } = req.body;
-    
-    if (!corrected_category) {
-      res.status(400).json({ message: 'Corrected category is required' });
+    const { data, error } = await supabase
+      .from('retraining_data')
+      .update({ verified: true, verified_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    if (!data) {
+      res.status(404).json({ message: 'Retraining data not found' });
       return;
     }
-    
-    // Update with verification data
-    const updated = await retrainingService.updateRetrainingData(id, {
-      corrected_category,
-      is_verified: true,
-      user_id: req.user?.id as string
-    });
-    
-    res.json(updated);
+    res.json(data);
   } catch (err) {
     next(err);
   }
 }
 
-export async function deleteRetrainingData(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function deleteRetrainingData(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    await retrainingService.deleteRetrainingData(id);
-    res.status(204).end();
+    const { error } = await supabase
+      .from('retraining_data')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    res.status(204).send();
   } catch (err) {
     next(err);
   }
 }
 
-export async function getUnverifiedSamples(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getUnverifiedSamples(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const limit = parseInt(req.query.limit as string) || 10;
-    const data = await retrainingService.getUnverifiedSamples(limit);
+    const { data, error } = await supabase
+      .from('retraining_data')
+      .select('*')
+      .eq('verified', false)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
     res.json(data);
   } catch (err) {
     next(err);
   }
 }
 
-export async function exportVerifiedData(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function exportVerifiedData(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = await retrainingService.exportVerifiedData();
+    const { data, error } = await supabase
+      .from('retraining_data')
+      .select('*')
+      .eq('verified', true)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
     res.json(data);
   } catch (err) {
     next(err);
   }
 }
 
-export async function getRetrainingDataByObjectId(req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getRetrainingDataByObjectId(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   try {
     const { object_id } = req.params;
-    const data = await retrainingService.getRetrainingDataByObjectId(object_id);
-    
-    if (!data) {
-      res.status(404).json({ message: 'No retraining data found for this object' });
-      return;
-    }
-    
+    const { data, error } = await supabase
+      .from('retraining_data')
+      .select('*')
+      .eq('object_id', object_id);
+
+    if (error) throw error;
     res.json(data);
   } catch (err) {
     next(err);

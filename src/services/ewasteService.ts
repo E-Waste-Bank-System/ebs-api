@@ -1,68 +1,47 @@
-import { BaseModel } from './index';
-import { Database } from '../types/supabase';
+import { EwasteModel, Ewaste } from '../models/ewasteModel';
+import { supabase } from '../config/supabase';
 
-type EWaste = Database['public']['Tables']['ewaste']['Row'];
-type EWasteInsert = Database['public']['Tables']['ewaste']['Insert'];
-type EWasteUpdate = Database['public']['Tables']['ewaste']['Update'];
-
-export class EWasteService {
-  private model: EWasteModel;
+export class EwasteService {
+  private model: EwasteModel;
 
   constructor() {
-    this.model = new EWasteModel();
+    this.model = new EwasteModel();
   }
 
-  async getEWaste(id: string): Promise<EWaste | null> {
-    return this.model.findById(id);
+  async getAllEwaste(): Promise<Ewaste[]> {
+    return await this.model.findAll();
   }
 
-  async getEWasteList(): Promise<EWaste[]> {
-    return this.model.findAll();
+  async getEwasteById(id: string): Promise<Ewaste> {
+    return await this.model.findById(id);
   }
 
-  async createEWaste(ewaste: EWasteInsert): Promise<EWaste> {
-    return this.model.create(ewaste);
+  async createEwaste(ewaste: Partial<Ewaste>): Promise<Ewaste> {
+    return await this.model.create(ewaste);
   }
 
-  async updateEWaste(id: string, ewaste: EWasteUpdate): Promise<EWaste> {
-    return this.model.update(id, ewaste);
+  async updateEwaste(id: string, ewaste: Partial<Ewaste>): Promise<Ewaste> {
+    return await this.model.update(id, ewaste);
   }
 
-  async deleteEWaste(id: string): Promise<void> {
-    return this.model.delete(id);
+  async deleteEwaste(id: string): Promise<boolean> {
+    return await this.model.delete(id);
   }
 
-  async getEWasteByCategory(category: string): Promise<EWaste[]> {
-    return this.model.findByCategory(category);
+  async validateEwaste(id: string): Promise<Ewaste> {
+    return await this.model.update(id, { validated: true });
   }
 
-  async getEWasteByUser(userId: string): Promise<EWaste[]> {
-    return this.model.findByUserId(userId);
+  async getEwasteByUserId(userId: string): Promise<Ewaste[]> {
+    return await this.model.findByUserId(userId);
   }
 
-  async getEWasteByDateRange(startDate: Date, endDate: Date): Promise<EWaste[]> {
-    return this.model.findByDateRange(startDate, endDate);
-  }
-
-  async validateEWaste(id: string, validatedBy: string, status: 'approved' | 'rejected'): Promise<EWaste> {
-    const ewaste = await this.model.findById(id);
-    if (!ewaste) {
-      throw new Error('E-waste not found');
-    }
-
-    return this.model.update(id, {
-      status,
-      validated_by: validatedBy,
-      updated_at: new Date().toISOString()
-    });
-  }
-
-  async getEWasteWithDetails(id: string): Promise<EWaste & { object: Database['public']['Tables']['objects']['Row'] } | null> {
-    const { data, error } = await this.model.supabase
+  async getEWasteWithDetails(id: string): Promise<Ewaste & { object: any } | null> {
+    const { data, error } = await supabase
       .from('ewaste')
       .select(`
         *,
-        object:objects (*)
+        object:objects(*)
       `)
       .eq('id', id)
       .single();
@@ -72,43 +51,46 @@ export class EWasteService {
   }
 
   async getEWasteListWithFilters(options: {
-    page?: number;
-    limit?: number;
-    status?: 'pending' | 'approved' | 'rejected';
+    page: number;
+    limit: number;
+    status?: string;
     category?: string;
     startDate?: Date;
     endDate?: Date;
-  } = {}): Promise<{ data: EWaste[]; total: number }> {
-    const { page = 1, limit = 10, status, category, startDate, endDate } = options;
-    const offset = (page - 1) * limit;
-
-    let query = this.model.supabase
+  }) {
+    let query = supabase
       .from('ewaste')
       .select('*', { count: 'exact' });
 
-    if (status) {
-      query = query.eq('status', status);
+    if (options.status) {
+      query = query.eq('status', options.status);
     }
 
-    if (category) {
-      query = query.eq('category', category);
+    if (options.category) {
+      query = query.eq('category', options.category);
     }
 
-    if (startDate) {
-      query = query.gte('created_at', startDate.toISOString());
+    if (options.startDate) {
+      query = query.gte('created_at', options.startDate.toISOString());
     }
 
-    if (endDate) {
-      query = query.lte('created_at', endDate.toISOString());
+    if (options.endDate) {
+      query = query.lte('created_at', options.endDate.toISOString());
     }
 
     const { data, error, count } = await query
-      .range(offset, offset + limit - 1)
+      .range((options.page - 1) * options.limit, options.page * options.limit - 1)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return { data, total: count || 0 };
+
+    return {
+      data,
+      total: count || 0,
+      page: options.page,
+      limit: options.limit
+    };
   }
 }
 
-export const ewasteService = new EWasteService(); 
+export const ewasteService = new EwasteService(); 

@@ -6,13 +6,14 @@ import { getAllDetectionsWithFilters } from '../services/detectionService';
 import { uploadImage } from '../utils/gcs';
 import env from '../config/env';
 import axios from 'axios';
-import { AuthRequest } from '../middlewares/auth';
+import { AuthRequest } from '../types/auth';
 import FormData from 'form-data';
 import supabase from '../utils/supabase';
 import logger from '../utils/logger';
 import { z } from 'zod';
 import { Database } from '../types/supabase';
 import { ValidationAction } from '../models/validation';
+import { DetectionService } from '../services/detectionService';
 
 type Detection = Database['public']['Tables']['objects']['Row'];
 type Scan = Database['public']['Tables']['scans']['Row'];
@@ -565,5 +566,33 @@ export async function updateDetectionImage(req: AuthRequest, res: Response, next
     res.json(updated);
   } catch (err) {
     next(err);
+  }
+}
+
+export class DetectionController {
+  private service: DetectionService;
+
+  constructor() {
+    this.service = new DetectionService();
+  }
+
+  async getAll() {
+    return await this.service.findAll();
+  }
+
+  async getById(id: string) {
+    return await this.service.findById(id);
+  }
+
+  async create(detection: any) {
+    return await this.service.create(detection);
+  }
+
+  async update(id: string, detection: any) {
+    return await this.service.update(id, detection);
+  }
+
+  async delete(id: string) {
+    return await this.service.delete(id);
   }
 } 

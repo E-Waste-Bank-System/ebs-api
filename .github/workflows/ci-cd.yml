@@ -133,6 +133,8 @@ jobs:
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
           # Set environment variables for the Cloud Run service
           env_vars: |
+            NODE_ENV=production
+            PORT=8080
             JWT_SECRET=c94xKfchSj64JJqI7cMKZbIs4n/6pB920TcQlzURwln+IV5SP+G1jIHg5u4hUVHqb9QanSU6hX+7FGr/iTQpiQ==
             SUPABASE_URL=https://dyhzmepwuzhfzbuemebb.supabase.co
             SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5aHptZXB3dXpoZnpidWVtZWJiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODUwNTU5MiwiZXhwIjoyMDY0MDgxNTkyfQ.WPrdVpC2gq8E3qfHke_JzUsdE-48tVlzdL_wYutCJqw

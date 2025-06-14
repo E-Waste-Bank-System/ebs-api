@@ -34,14 +34,29 @@ import { RetrainingData } from './retraining/entities/retraining.entity';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get('DATABASE_URL');
+        const isProduction = configService.get('NODE_ENV') === 'production';
+        
+        console.log('Database configuration:');
+        console.log('- Environment:', configService.get('NODE_ENV'));
+        console.log('- Database URL configured:', !!databaseUrl);
+        console.log('- Production mode:', isProduction);
         
         return {
           type: 'postgres',
           url: databaseUrl,
           entities: [Profile, Article, Scan, DetectedObject, RetrainingData],
-          synchronize: configService.get('NODE_ENV') === 'development',
-          logging: configService.get('NODE_ENV') === 'development',
-          ssl: { rejectUnauthorized: false },
+          synchronize: false, // Disable synchronization to prevent schema conflicts
+          logging: !isProduction, // Only log in development
+          ssl: isProduction ? { rejectUnauthorized: false } : false,
+          extra: {
+            connectionLimit: 10,
+            acquireConnectionTimeout: 60000,
+            timeout: 60000,
+            connectionTimeoutMillis: 60000,
+            idleTimeoutMillis: 600000,
+          },
+          retryAttempts: 3,
+          retryDelay: 3000,
         };
       },
       inject: [ConfigService],

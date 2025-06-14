@@ -5,8 +5,8 @@ import { RetrainingData } from '../../retraining/entities/retraining.entity';
 
 @Entity('detected_objects')
 export class DetectedObject extends BaseEntity {
-  @Column()
-  name: string;
+  @Column({ nullable: true })
+  name?: string;
 
   @Column()
   category: string;

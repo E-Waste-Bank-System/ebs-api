@@ -5,8 +5,16 @@ import { ScanStatus } from '../entities/scan.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class CreateScanDto {
+  @ApiProperty({
+    type: 'string',
+    format: 'binary',
+    description: 'E-waste image file for AI scanning',
+    example: 'e-waste-image.jpg'
+  })
+  file: any;
+
   @ApiPropertyOptional({
-    description: 'Original filename',
+    description: 'Original filename (optional - will use uploaded filename if not provided)',
     example: 'e-waste-scan.jpg',
   })
   @IsOptional()

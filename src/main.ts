@@ -90,20 +90,60 @@ async function bootstrap() {
 
     // Swagger documentation (enabled in all environments)
     const config = new DocumentBuilder()
-      .setTitle('E-Waste Backend Service API')
-      .setDescription('API for E-Waste scanning and management system')
-      .setVersion('1.0')
+      .setTitle('E-Waste Backend Service (EBS) API')
+      .setDescription(`
+        ## E-Waste Management System API
+        
+        This API provides comprehensive e-waste scanning, management, and analytics capabilities.
+        
+        ### Features
+        - 🔍 **AI-Powered Scanning**: Upload images to detect and categorize e-waste items
+        - 📊 **Analytics Dashboard**: Real-time statistics and insights
+        - 📝 **Content Management**: Articles and educational content
+        - 👥 **User Management**: Profile and authentication system
+        - 🔧 **Admin Tools**: Complete administrative interface
+        
+        ### Authentication
+        Most endpoints require JWT authentication. Use the **Authorize** button to set your bearer token.
+        
+        ### Getting Started
+        1. **Login**: Use \`POST /auth/login\` or \`POST /auth/token\` for Google sign-in
+        2. **Upload Scan**: Use \`POST /scans\` to scan e-waste images
+        3. **View Results**: Check scan status and detected objects
+        4. **Explore**: Browse articles, analytics, and admin features
+      `)
+      .setVersion('1.0.0')
+      .setContact(
+        'EBS Development Team',
+        'https://github.com/your-org/ebs',
+        'support@ebs.com'
+      )
+      .setLicense('MIT', 'https://opensource.org/licenses/MIT')
+      .addServer('https://ebs-api-981332637673.asia-southeast2.run.app', 'Production Server')
+      .addServer('http://localhost:8080', 'Development Server')
       .addBearerAuth(
         {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          name: 'JWT',
-          description: 'Enter JWT token',
+          name: 'Authorization',
+          description: 'Enter your JWT token (without "Bearer " prefix)',
           in: 'header',
         },
         'JWT-auth',
       )
+      .addTag('Authentication', 'User authentication and token management')
+      .addTag('Health', 'System health and monitoring endpoints')
+      .addTag('Scans', 'E-waste image scanning and AI processing')
+      .addTag('Objects', 'Detected e-waste objects and validation')
+      .addTag('Articles', 'Public articles and educational content')
+      .addTag('File Upload', 'File upload and cloud storage')
+      .addTag('Admin - Dashboard', 'Administrative dashboard and analytics')
+      .addTag('Admin - Articles', 'Article management for administrators')
+      .addTag('Admin - Scans', 'Scan management and monitoring')
+      .addTag('Admin - Objects', 'Object validation and management')
+      .addTag('Admin - Profiles', 'User profile management')
+      .addTag('Retraining', 'AI model retraining data management')
       .build();
     
     const document = SwaggerModule.createDocument(app, config);

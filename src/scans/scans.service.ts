@@ -28,19 +28,29 @@ export class ScansService {
   ) {
     // Initialize Google Cloud Storage
     this.bucketName = this.configService.get('GCP_BUCKET') || 'ebs-storage';
-    
-    // Initialize storage with service account key file
-    const keyFilename = this.configService.get('GOOGLE_CLOUD_KEY_FILE') || 'ebs-cloud-456404-472153b611d9.json';
-    const keyFilePath = path.join(process.cwd(), keyFilename);
     const projectId = this.configService.get('GCP_PROJECT_ID') || 'ebs-cloud-456404';
     
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
     
     try {
-      this.storage = new Storage({
-        keyFilename: keyFilePath,
-        projectId,
-      });
+      // In Cloud Run, use default credentials instead of key file
+      const keyFilename = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
+      const keyFilePath = keyFilename ? path.join(process.cwd(), keyFilename) : null;
+      
+      // Check if we're in Cloud Run (no key file) or local development (with key file)
+      if (keyFilePath && fs.existsSync(keyFilePath)) {
+        this.logger.log('Using service account key file for authentication');
+        this.storage = new Storage({
+          keyFilename: keyFilePath,
+          projectId,
+        });
+      } else {
+        this.logger.log('Using default credentials (Cloud Run environment)');
+        this.storage = new Storage({
+          projectId,
+        });
+      }
+      
       this.logger.log('Google Cloud Storage initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Google Cloud Storage:', error);
@@ -145,8 +155,18 @@ export class ScansService {
         hasPath: !!file?.path,
       });
 
+      if (!file) {
+        throw new BadRequestException('No file provided');
+      }
+
+      if (!file.buffer && !file.path) {
+        throw new BadRequestException('File has no buffer or path');
+      }
+
       // Generate unique filename
       const filename = `scans/scan-${uuidv4()}-${Date.now()}${path.extname(file.originalname || '.jpg')}`;
+      
+      this.logger.log(`Attempting to upload file to GCS: ${filename}`);
       
       // Get the bucket
       const bucket = this.storage.bucket(this.bucketName);
@@ -167,11 +187,12 @@ export class ScansService {
       return new Promise((resolve, reject) => {
         stream.on('error', (error) => {
           this.logger.error('Failed to upload to GCS:', error);
-          reject(new BadRequestException('Failed to upload image to cloud storage'));
+          reject(new BadRequestException(`Failed to upload image to cloud storage: ${error.message}`));
         });
 
         stream.on('finish', async () => {
           try {
+            this.logger.log('Upload stream finished, making file public...');
             // Make the file publicly readable
             await fileUpload.makePublic();
             
@@ -181,26 +202,33 @@ export class ScansService {
             resolve(publicUrl);
           } catch (error) {
             this.logger.error('Failed to make file public:', error);
-            reject(new BadRequestException('Failed to make uploaded file accessible'));
+            reject(new BadRequestException(`Failed to make uploaded file accessible: ${error.message}`));
           }
         });
 
         // Upload the file buffer
-        if (file.buffer) {
-          stream.end(file.buffer);
-        } else if (file.path) {
-          // Read file from disk and upload
-          const fileBuffer = fs.readFileSync(file.path);
-          stream.end(fileBuffer);
-          // Clean up temporary file
-          fs.unlinkSync(file.path);
-        } else {
-          reject(new BadRequestException('No file buffer or path available'));
+        try {
+          if (file.buffer) {
+            this.logger.log(`Uploading file buffer (${file.buffer.length} bytes)`);
+            stream.end(file.buffer);
+          } else if (file.path) {
+            this.logger.log(`Reading file from path: ${file.path}`);
+            // Read file from disk and upload
+            const fileBuffer = fs.readFileSync(file.path);
+            stream.end(fileBuffer);
+            // Clean up temporary file
+            fs.unlinkSync(file.path);
+          } else {
+            reject(new BadRequestException('No file buffer or path available'));
+          }
+        } catch (streamError) {
+          this.logger.error('Error writing to stream:', streamError);
+          reject(new BadRequestException(`Failed to write file to stream: ${streamError.message}`));
         }
       });
     } catch (error) {
       this.logger.error('Failed to upload image:', error);
-      throw new BadRequestException('Failed to upload image');
+      throw new BadRequestException(`Failed to upload image: ${error.message}`);
     }
   }
 

@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { HealthResponseDto } from '../common/dto/response.dto';
 
 @ApiTags('Health')
 @Controller('health')
@@ -12,10 +13,21 @@ export class HealthController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Health check endpoint' })
-  @ApiResponse({ status: 200, description: 'Service is healthy' })
-  @ApiResponse({ status: 503, description: 'Service is unhealthy' })
-  async getHealth() {
+  @ApiOperation({ 
+    summary: 'System health check',
+    description: 'Check the overall health of the API service including database connectivity'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Service is healthy',
+    type: HealthResponseDto
+  })
+  @ApiResponse({ 
+    status: 503, 
+    description: 'Service is unhealthy',
+    type: HealthResponseDto
+  })
+  async getHealth(): Promise<HealthResponseDto> {
     const startTime = Date.now();
     
     try {
@@ -62,9 +74,46 @@ export class HealthController {
   }
 
   @Get('db')
-  @ApiOperation({ summary: 'Database health check' })
-  @ApiResponse({ status: 200, description: 'Database is healthy' })
-  @ApiResponse({ status: 503, description: 'Database is unhealthy' })
+  @ApiOperation({ 
+    summary: 'Database connectivity check',
+    description: 'Detailed database health check with connection metrics and server information'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Database is healthy',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['ok', 'error'] },
+        database: {
+          type: 'object',
+          properties: {
+            connected: { type: 'boolean' },
+            responseTime: { type: 'string' },
+            serverTime: { type: 'string' },
+            version: { type: 'string' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 503, 
+    description: 'Database is unhealthy',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['ok', 'error'] },
+        database: {
+          type: 'object',
+          properties: {
+            connected: { type: 'boolean' },
+            error: { type: 'string' }
+          }
+        }
+      }
+    }
+  })
   async getDatabaseHealth() {
     try {
       const startTime = Date.now();

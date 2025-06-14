@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsEnum, MinLength, IsNotEmpty } from 'class-validator';
 import { UserRole } from '../../common/enums/role.enum';
 
 export class LoginDto {
@@ -15,7 +15,18 @@ export class LoginDto {
     example: 'password123',
   })
   @IsString()
+  @MinLength(6)
   password: string;
+}
+
+export class GenerateTokenDto {
+  @ApiProperty({ 
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Supabase Auth user ID'
+  })
+  @IsString()
+  @IsNotEmpty()
+  user_id: string;
 }
 
 export class AuthResponseDto {

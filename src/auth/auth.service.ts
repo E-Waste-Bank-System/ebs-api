@@ -293,23 +293,108 @@ export class AuthService {
   async verifyTokenManually(token: string) {
     try {
       const jwtSecret = this.configService.get('JWT_SECRET');
-      console.log('Verifying token with secret length:', jwtSecret?.length);
-      
       const decoded = jwt.verify(token, jwtSecret);
-      console.log('Token decoded successfully:', decoded);
-      
       return {
-        success: true,
+        valid: true,
         decoded,
-        message: 'Token is valid',
+        message: 'Token is valid'
       };
     } catch (error) {
-      console.error('Token verification failed:', error.message);
       return {
-        success: false,
+        valid: false,
         error: error.message,
-        message: 'Token verification failed',
+        message: 'Token is invalid'
       };
+    }
+  }
+
+  async generateTokenForGoogleUser(userId: string): Promise<AuthResponseDto> {
+    try {
+      console.log('Generating token for Google user:', userId);
+      
+      // First, try to get user from Supabase Auth to verify they exist
+      const { data: supabaseUser, error: supabaseError } = await this.supabaseService
+        .getClient()
+        .auth.admin.getUserById(userId);
+
+      if (supabaseError || !supabaseUser.user) {
+        console.log('Supabase user not found:', supabaseError?.message);
+        throw new UnauthorizedException('User not found in Supabase Auth');
+      }
+
+      console.log('Supabase user found:', supabaseUser.user.email);
+
+      // Get or create profile in our database
+      let profile = await this.profileRepository.findOne({
+        where: { email: supabaseUser.user.email },
+      });
+
+      if (!profile) {
+        console.log('Profile not found, creating from Supabase data...');
+        // Create new profile from Supabase user data
+        profile = this.profileRepository.create({
+          id: supabaseUser.user.id, // Use Supabase user ID
+          email: supabaseUser.user.email,
+          full_name: supabaseUser.user.user_metadata?.full_name || 
+                    supabaseUser.user.user_metadata?.name || 
+                    supabaseUser.user.email.split('@')[0],
+          avatar_url: supabaseUser.user.user_metadata?.avatar_url || 
+                     supabaseUser.user.user_metadata?.picture,
+          role: UserRole.USER, // Default role
+          is_active: true,
+          email_verified: supabaseUser.user.email_confirmed_at ? true : false,
+          last_login_at: new Date(),
+        });
+        profile = await this.profileRepository.save(profile);
+        console.log('New profile created:', profile.id);
+      } else {
+        console.log('Profile found, updating last login...');
+        // Update last login and sync any missing data
+        profile.last_login_at = new Date();
+        
+        // Update profile data from Supabase if missing
+        if (!profile.full_name && supabaseUser.user.user_metadata?.full_name) {
+          profile.full_name = supabaseUser.user.user_metadata.full_name;
+        }
+        if (!profile.avatar_url && supabaseUser.user.user_metadata?.avatar_url) {
+          profile.avatar_url = supabaseUser.user.user_metadata.avatar_url;
+        }
+        
+        await this.profileRepository.save(profile);
+      }
+
+      // Generate JWT token
+      const payload = { 
+        sub: profile.id, 
+        email: profile.email,
+        role: profile.role,
+      };
+      
+      console.log('Generating JWT with payload:', payload);
+      
+      const jwtSecret = this.configService.get('JWT_SECRET');
+      const access_token = jwt.sign(payload, jwtSecret, { 
+        expiresIn: this.configService.get('JWT_EXPIRES_IN') || '24h' 
+      });
+
+      console.log('Token generation successful for user:', profile.id);
+
+      return {
+        access_token,
+        user: {
+          id: profile.id,
+          email: profile.email,
+          full_name: profile.full_name,
+          role: profile.role,
+          avatar_url: profile.avatar_url,
+        },
+      };
+    } catch (error) {
+      console.error('Token generation error:', error);
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Token generation failed');
     }
   }
 } 

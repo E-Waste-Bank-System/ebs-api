@@ -14,6 +14,7 @@ import { RetrainingModule } from './retraining/retraining.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { UploadModule } from './upload/upload.module';
 import { SupabaseModule } from './supabase/supabase.module';
+import { HealthModule } from './health/health.module';
 
 import { Profile } from './profiles/entities/profile.entity';
 import { Article } from './articles/entities/article.entity';
@@ -41,22 +42,31 @@ import { RetrainingData } from './retraining/entities/retraining.entity';
         console.log('- Database URL configured:', !!databaseUrl);
         console.log('- Production mode:', isProduction);
         
+        if (!databaseUrl) {
+          console.error('❌ DATABASE_URL is not configured');
+          throw new Error('DATABASE_URL environment variable is required');
+        }
+        
         return {
           type: 'postgres',
           url: databaseUrl,
           entities: [Profile, Article, Scan, DetectedObject, RetrainingData],
           synchronize: false, // Disable synchronization to prevent schema conflicts
-          logging: !isProduction, // Only log in development
+          logging: !isProduction ? ['error', 'warn', 'migration'] : ['error'], // Minimal logging in production
           ssl: isProduction ? { rejectUnauthorized: false } : false,
           extra: {
-            connectionLimit: 10,
-            acquireConnectionTimeout: 60000,
-            timeout: 60000,
-            connectionTimeoutMillis: 60000,
-            idleTimeoutMillis: 600000,
+            connectionLimit: 5,
+            acquireConnectionTimeout: 30000,
+            timeout: 30000,
+            connectionTimeoutMillis: 30000,
+            idleTimeoutMillis: 300000,
+            max: 5,
+            min: 1,
           },
-          retryAttempts: 3,
-          retryDelay: 3000,
+          retryAttempts: 5,
+          retryDelay: 5000,
+          autoLoadEntities: true,
+          keepConnectionAlive: true,
         };
       },
       inject: [ConfigService],
@@ -97,6 +107,7 @@ import { RetrainingData } from './retraining/entities/retraining.entity';
     RetrainingModule,
     DashboardModule,
     UploadModule,
+    HealthModule,
   ],
   controllers: [],
   providers: [],

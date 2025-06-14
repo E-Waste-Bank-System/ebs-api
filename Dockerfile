@@ -1,31 +1,42 @@
-# syntax=docker/dockerfile:1
-
-# 1. Build stage
+# Build stage
 FROM node:22-alpine AS builder
+
 WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
-RUN npm ci
-COPY tsconfig.json ./
-COPY src ./src
-COPY scripts ./scripts
-# Make sure the credentials file is not included in the build
-RUN rm -f ebs-cloud-456404-42c276033ca1.json
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy source code
+COPY . .
+
+# Build the application
 RUN npm run build
-RUN ls -la dist/
 
-# 2. Production stage
-FROM node:22-alpine
+# Production stage
+FROM node:18-alpine AS production
+
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY --from=builder /app/dist ./dist
-# Set environment variables
-ENV NODE_ENV=production
-# Explicitly unset credentials env var to ensure we use workload identity
-ENV GOOGLE_APPLICATION_CREDENTIALS=""
-# Print environment for debugging
-RUN echo "Environment setup complete. GOOGLE_APPLICATION_CREDENTIALS=''"
 
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
+
+# Copy built application and node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nestjs:nodejs /app/package*.json ./
+COPY --chown=nestjs:nodejs ./ebs-cloud-*.json ./
+
+# Switch to non-root user
+USER nestjs
+
+# Expose port
 EXPOSE 8080
-ENV PORT 8080
-CMD ["node", "dist/server.js"]
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node --version || exit 1
+
+# Start the application
+CMD ["node", "dist/main.js"]

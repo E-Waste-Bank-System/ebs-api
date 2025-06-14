@@ -83,34 +83,32 @@ async function bootstrap() {
         endpoints: {
           health: '/health',
           api: '/api/v1',
-          docs: process.env.NODE_ENV !== 'production' ? '/api/docs' : 'disabled in production'
+          docs: '/api/docs'
         }
       });
     });
 
-    // Swagger documentation (only in development)
-    if (process.env.NODE_ENV !== 'production') {
-      const config = new DocumentBuilder()
-        .setTitle('E-Waste Backend Service API')
-        .setDescription('API for E-Waste scanning and management system')
-        .setVersion('1.0')
-        .addBearerAuth(
-          {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT',
-            name: 'JWT',
-            description: 'Enter JWT token',
-            in: 'header',
-          },
-          'JWT-auth',
-        )
-        .build();
-      
-      const document = SwaggerModule.createDocument(app, config);
-      SwaggerModule.setup('api/docs', app, document);
-      console.log('📖 API Documentation available at /api/docs');
-    }
+    // Swagger documentation (enabled in all environments)
+    const config = new DocumentBuilder()
+      .setTitle('E-Waste Backend Service API')
+      .setDescription('API for E-Waste scanning and management system')
+      .setVersion('1.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          name: 'JWT',
+          description: 'Enter JWT token',
+          in: 'header',
+        },
+        'JWT-auth',
+      )
+      .build();
+    
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+    console.log('📖 API Documentation available at /api/docs');
 
     // Use port 8080 for Cloud Run, fallback to 3000 for local development
     const port = process.env.PORT || 8080;
@@ -119,9 +117,7 @@ async function bootstrap() {
     console.log(`🚀 Application is running on port: ${port}`);
     console.log(`🌐 Health check available at: /health`);
     console.log(`📋 API info available at: /`);
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`📖 API Documentation: http://localhost:${port}/api/docs`);
-    }
+    console.log(`📖 API Documentation: http://localhost:${port}/api/docs`);
   } catch (error) {
     console.error('❌ Failed to start application:', error);
     

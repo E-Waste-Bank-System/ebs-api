@@ -2,6 +2,7 @@ import {
   Controller, 
   Get, 
   Post, 
+  Delete, 
   Body, 
   Param, 
   Query, 
@@ -15,7 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 
 import { ScansService } from './scans.service';
-import { CreateScanDto, ScanResponseDto, ScanDetailDto, ScanListQueryDto } from './dto/scan.dto';
+import { CreateScanDto, ScanResponseDto, ScanDetailDto, ScanListQueryDto, DeleteScanResponseDto } from './dto/scan.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -291,6 +292,68 @@ export class ScansController {
       metadata: scan.metadata,
     };
   }
+
+  @Delete(':id')
+  @Roles(UserRole.USER, UserRole.ADMIN, UserRole.SUPERADMIN)
+  @ApiOperation({ 
+    summary: 'Delete a scan',
+    description: `
+      Delete a scan and all its associated data.
+      
+      **Access Control:**
+      - Users can only delete their own scans
+      - Admins can delete any scan
+      
+      **What gets deleted:**
+      - Scan record from database
+      - All detected objects associated with the scan
+      - Image file from cloud storage
+      - All related metadata
+      
+      **Important Notes:**
+      - This action is irreversible
+      - Associated retraining data will also be removed
+      - Processing status doesn't matter - any scan can be deleted
+      
+      **Use Cases:**
+      - Remove unwanted or duplicate scans
+      - Clean up failed scans
+      - User privacy - delete personal data
+      - Admin moderation - remove inappropriate content
+    `
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Scan deleted successfully',
+    type: DeleteScanResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - authentication required'
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - cannot delete other users\' scans'
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Scan not found'
+  })
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser('id') userId: string,
+    @GetUser('role') userRole: UserRole,
+  ): Promise<DeleteScanResponseDto> {
+    // Regular users can only delete their own scans
+    const filterUserId = userRole === UserRole.USER ? userId : undefined;
+    
+    await this.scansService.delete(id, filterUserId);
+    
+    return {
+      message: 'Scan deleted successfully',
+      deletedScanId: id,
+    };
+  }
 }
 
 @ApiTags('Admin - Scans')
@@ -410,6 +473,22 @@ export class AdminScansController {
       user_id: scan.user_id,
       objects: scan.objects || [],
       metadata: scan.metadata,
+    };
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Admin delete scan (any scan)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Scan deleted successfully by admin',
+    type: DeleteScanResponseDto,
+  })
+  async delete(@Param('id', ParseUUIDPipe) id: string): Promise<DeleteScanResponseDto> {
+    await this.scansService.delete(id);
+    
+    return {
+      message: 'Scan deleted successfully',
+      deletedScanId: id,
     };
   }
 } 

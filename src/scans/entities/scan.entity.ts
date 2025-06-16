@@ -47,6 +47,6 @@ export class Scan extends BaseEntity {
   @Column()
   user_id: string;
 
-  @OneToMany(() => DetectedObject, (object) => object.scan)
+  @OneToMany(() => DetectedObject, (object) => object.scan, { cascade: true })
   objects: DetectedObject[];
 } 

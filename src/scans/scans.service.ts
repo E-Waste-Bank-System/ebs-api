@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -145,6 +145,66 @@ export class ScansService {
     return scan;
   }
 
+  async delete(id: string, userId?: string): Promise<void> {
+    try {
+      // First, find the scan to ensure it exists and check permissions
+      const queryBuilder = this.scanRepository
+        .createQueryBuilder('scan')
+        .leftJoinAndSelect('scan.objects', 'objects')
+        .where('scan.id = :id', { id });
+
+      if (userId) {
+        queryBuilder.andWhere('scan.user_id = :userId', { userId });
+      }
+
+      const scan = await queryBuilder.getOne();
+
+      if (!scan) {
+        if (userId) {
+          // Check if scan exists for another user (forbidden) or doesn't exist at all (not found)
+          const scanExists = await this.scanRepository.findOne({
+            where: { id },
+            select: ['id'],
+          });
+          
+          if (scanExists) {
+            throw new ForbiddenException('You can only delete your own scans');
+          }
+        }
+        throw new NotFoundException('Scan not found');
+      }
+
+      this.logger.log(`Deleting scan ${id} with ${scan.objects?.length || 0} objects`);
+
+      // Delete associated objects first (cascade should handle this, but let's be explicit)
+      if (scan.objects && scan.objects.length > 0) {
+        await this.objectRepository.delete({ scan_id: id });
+        this.logger.log(`Deleted ${scan.objects.length} objects for scan ${id}`);
+      }
+
+      // Delete any associated retraining data
+      // Note: This would require the retraining repository if implemented
+      // For now, the foreign key constraints should handle cascade deletion
+
+      // Delete the image from cloud storage
+      if (scan.image_url) {
+        await this.deleteImage(scan.image_url);
+      }
+
+      // Finally, delete the scan record
+      await this.scanRepository.delete(id);
+      
+      this.logger.log(`Successfully deleted scan ${id}`);
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error;
+      }
+      
+      this.logger.error(`Failed to delete scan ${id}:`, error);
+      throw new BadRequestException(`Failed to delete scan: ${error.message}`);
+    }
+  }
+
   private async uploadImage(file: any): Promise<string> {
     try {
       this.logger.log('File received:', {
@@ -234,19 +294,31 @@ export class ScansService {
 
   private async deleteImage(imageUrl: string): Promise<void> {
     try {
-      // Extract filename from GCS URL
-      const urlParts = imageUrl.split('/');
-      const filename = urlParts[urlParts.length - 1];
-      const filePath = `scans/${filename}`;
+      // Extract file path from GCS URL
+      // URL format: https://storage.googleapis.com/{bucket}/{path}
+      const url = new URL(imageUrl);
+      const pathSegments = url.pathname.split('/');
+      // Remove empty first segment and bucket name
+      pathSegments.shift(); // Remove empty string
+      pathSegments.shift(); // Remove bucket name
+      const filePath = pathSegments.join('/');
+      
+      this.logger.log(`Attempting to delete image from GCS: ${filePath}`);
       
       const bucket = this.storage.bucket(this.bucketName);
       const file = bucket.file(filePath);
       
-      await file.delete();
-      this.logger.log(`Successfully deleted image from GCS: ${filePath}`);
+      // Check if file exists before trying to delete
+      const [exists] = await file.exists();
+      if (exists) {
+        await file.delete();
+        this.logger.log(`Successfully deleted image from GCS: ${filePath}`);
+      } else {
+        this.logger.warn(`Image file not found in GCS: ${filePath}`);
+      }
     } catch (error) {
       this.logger.error('Failed to delete image from GCS:', error);
-      // Don't throw error as this is cleanup operation
+      // Don't throw error as this is cleanup operation - scan deletion should still proceed
     }
   }
 

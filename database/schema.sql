@@ -44,7 +44,7 @@ CREATE TABLE public.detected_objects (
   suggestions ARRAY,
   CONSTRAINT detected_objects_pkey PRIMARY KEY (id),
   CONSTRAINT detected_objects_validated_by_fkey FOREIGN KEY (validated_by) REFERENCES public.profiles(id),
-  CONSTRAINT detected_objects_scan_id_fkey FOREIGN KEY (scan_id) REFERENCES public.scans(id)
+  CONSTRAINT detected_objects_scan_id_fkey FOREIGN KEY (scan_id) REFERENCES public.scans(id) ON DELETE CASCADE
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -82,7 +82,7 @@ CREATE TABLE public.retraining_data (
   deleted_at timestamp with time zone,
   CONSTRAINT retraining_data_pkey PRIMARY KEY (id),
   CONSTRAINT retraining_data_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES public.profiles(id),
-  CONSTRAINT retraining_data_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.detected_objects(id)
+  CONSTRAINT retraining_data_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.detected_objects(id) ON DELETE CASCADE
 );
 CREATE TABLE public.scans (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

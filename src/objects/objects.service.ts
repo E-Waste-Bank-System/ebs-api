@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DetectedObject } from './entities/object.entity';
 import { PaginationDto, PaginatedResponse } from '../common/dto/pagination.dto';
+import { CreateObjectDto } from './dto/object.dto';
 
 @Injectable()
 export class ObjectsService {
@@ -76,13 +77,31 @@ export class ObjectsService {
     return object;
   }
 
-  async validate(id: string, validatedBy: string, notes?: string): Promise<DetectedObject> {
+  async validate(
+    id: string, 
+    validatedBy: string, 
+    data?: { 
+      notes?: string; 
+      corrected_category?: string; 
+      corrected_value?: number; 
+    }
+  ): Promise<DetectedObject> {
     const object = await this.findOne(id);
     
     object.is_validated = true;
     object.validated_by = validatedBy;
     object.validated_at = new Date();
-    object.validation_notes = notes;
+    object.validation_notes = data?.notes;
+
+    // Update category if corrected
+    if (data?.corrected_category && data.corrected_category !== object.category) {
+      object.category = data.corrected_category;
+    }
+
+    // Update estimated value if corrected
+    if (data?.corrected_value !== undefined && data.corrected_value !== object.estimated_value) {
+      object.estimated_value = data.corrected_value;
+    }
 
     return await this.objectRepository.save(object);
   }
@@ -94,6 +113,27 @@ export class ObjectsService {
     object.validated_by = validatedBy;
     object.validated_at = new Date();
     object.validation_notes = notes;
+
+    return await this.objectRepository.save(object);
+  }
+
+  async create(createObjectDto: CreateObjectDto, createdBy: string): Promise<DetectedObject> {
+    const object = this.objectRepository.create({
+      name: createObjectDto.name,
+      category: createObjectDto.category,
+      estimated_value: createObjectDto.estimated_value,
+      scan_id: createObjectDto.scan_id,
+      description: createObjectDto.description,
+      risk_level: createObjectDto.risk_level || 1,
+      damage_level: createObjectDto.damage_level || 1,
+      confidence_score: 1.0, // Manual entry = 100% confidence
+      bounding_box: { x: 0, y: 0, width: 0, height: 0 }, // No bounding box for manual entry
+      is_validated: true, // Manual entries are automatically validated
+      validated_by: createdBy,
+      validated_at: new Date(),
+      validation_notes: 'Manual entry by administrator',
+      ai_metadata: { source: 'manual_entry', created_by: createdBy }
+    });
 
     return await this.objectRepository.save(object);
   }

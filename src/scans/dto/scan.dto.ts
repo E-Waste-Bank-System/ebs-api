@@ -121,4 +121,18 @@ export class ScanListQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   user_id?: string;
+}
+
+export class DeleteScanResponseDto {
+  @ApiProperty({
+    description: 'Success message confirming scan deletion',
+    example: 'Scan deleted successfully'
+  })
+  message: string;
+
+  @ApiProperty({
+    description: 'ID of the deleted scan',
+    example: '123e4567-e89b-12d3-a456-426614174000'
+  })
+  deletedScanId: string;
 } 

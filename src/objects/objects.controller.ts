@@ -1,6 +1,7 @@
 import { 
   Controller, 
   Get, 
+  Post,
   Patch, 
   Param, 
   Body, 
@@ -17,6 +18,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { PaginationDto, PaginatedResponse } from '../common/dto/pagination.dto';
+import { ValidateObjectDto, CreateObjectDto } from './dto/object.dto';
 
 @ApiTags('Objects')
 @Controller('objects')
@@ -92,6 +94,19 @@ export class AdminObjectsController {
     });
   }
 
+  @Post()
+  @ApiOperation({ summary: 'Create manual object entry (for missed detections)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Object created successfully',
+  })
+  async create(
+    @Body() createObjectDto: CreateObjectDto,
+    @GetUser('id') userId: string,
+  ) {
+    return await this.objectsService.create(createObjectDto, userId);
+  }
+
   @Patch(':id/validate')
   @ApiOperation({ summary: 'Validate object (correct category, price)' })
   @ApiResponse({
@@ -100,10 +115,10 @@ export class AdminObjectsController {
   })
   async validate(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { notes?: string },
+    @Body() body: ValidateObjectDto,
     @GetUser('id') userId: string,
   ) {
-    return await this.objectsService.validate(id, userId, body.notes);
+    return await this.objectsService.validate(id, userId, body);
   }
 
   @Patch(':id/reject')

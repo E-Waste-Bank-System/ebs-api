@@ -1,6 +1,10 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+-- Create custom types/enums
+CREATE TYPE dataset_status AS ENUM ('draft', 'annotating', 'ready', 'training', 'completed', 'failed');
+CREATE TYPE annotation_status AS ENUM ('pending', 'in_progress', 'completed', 'reviewed', 'rejected');
+
 CREATE TABLE public.articles (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   title character varying NOT NULL,
@@ -64,6 +68,45 @@ CREATE TABLE public.profiles (
   deleted_at timestamp with time zone,
   CONSTRAINT profiles_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.datasets (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name character varying NOT NULL,
+  description text,
+  status dataset_status DEFAULT 'draft'::dataset_status,
+  configuration jsonb,
+  total_images integer DEFAULT 0,
+  annotated_images integer DEFAULT 0,
+  total_annotations integer DEFAULT 0,
+  created_by uuid NOT NULL,
+  training_started_at timestamp with time zone,
+  training_completed_at timestamp with time zone,
+  training_metrics jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
+  CONSTRAINT datasets_pkey PRIMARY KEY (id),
+  CONSTRAINT datasets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.annotation_tasks (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  dataset_id uuid NOT NULL,
+  object_id uuid,
+  image_url text NOT NULL,
+  original_filename character varying,
+  status annotation_status DEFAULT 'pending'::annotation_status,
+  annotations jsonb,
+  assigned_to uuid,
+  assigned_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  deleted_at timestamp with time zone,
+  CONSTRAINT annotation_tasks_pkey PRIMARY KEY (id),
+  CONSTRAINT annotation_tasks_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.datasets(id) ON DELETE CASCADE,
+  CONSTRAINT annotation_tasks_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.detected_objects(id),
+  CONSTRAINT annotation_tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.retraining_data (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   type USER-DEFINED NOT NULL,
@@ -72,17 +115,22 @@ CREATE TABLE public.retraining_data (
   original_confidence numeric NOT NULL,
   corrected_value numeric,
   correction_data jsonb DEFAULT '{}'::jsonb,
+  annotation_data jsonb,
   notes text,
   submitted_by uuid NOT NULL,
   is_processed boolean DEFAULT false,
   processed_at timestamp with time zone,
-  object_id uuid NOT NULL,
+  object_id uuid,
+  dataset_id uuid,
+  annotation_task_id uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   deleted_at timestamp with time zone,
   CONSTRAINT retraining_data_pkey PRIMARY KEY (id),
   CONSTRAINT retraining_data_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES public.profiles(id),
-  CONSTRAINT retraining_data_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.detected_objects(id) ON DELETE CASCADE
+  CONSTRAINT retraining_data_object_id_fkey FOREIGN KEY (object_id) REFERENCES public.detected_objects(id) ON DELETE CASCADE,
+  CONSTRAINT retraining_data_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.datasets(id) ON DELETE CASCADE,
+  CONSTRAINT retraining_data_annotation_task_id_fkey FOREIGN KEY (annotation_task_id) REFERENCES public.annotation_tasks(id) ON DELETE CASCADE
 );
 CREATE TABLE public.scans (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

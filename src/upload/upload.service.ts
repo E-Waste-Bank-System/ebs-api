@@ -20,6 +20,7 @@ export class UploadService {
     const projectId = this.configService.get('GCP_PROJECT_ID') || 'ebs-cloud-456404';
     
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
+    this.logger.log(`Key file path: ${keyFilePath}`);
     
     try {
       this.storage = new Storage({
@@ -35,13 +36,22 @@ export class UploadService {
 
   async uploadFile(file: any, uploadPath?: string): Promise<string> {
     try {
-      this.logger.log('File received:', {
+      this.logger.log('Upload service - File received:', {
         originalname: file?.originalname,
         mimetype: file?.mimetype,
         size: file?.size,
         hasBuffer: !!file?.buffer,
+        bufferLength: file?.buffer?.length,
         uploadPath,
       });
+
+      if (!file) {
+        throw new BadRequestException('No file provided');
+      }
+
+      if (!file.buffer) {
+        throw new BadRequestException('File buffer is missing');
+      }
 
       // Determine the upload path
       const basePath = uploadPath || 'uploads';
@@ -50,7 +60,25 @@ export class UploadService {
       const fileExtension = path.extname(file.originalname || '.jpg');
       const filename = `${basePath}/${uuidv4()}-${Date.now()}${fileExtension}`;
       
-      // Get the bucket
+      this.logger.log(`Generated filename: ${filename}`);
+
+      // Test bucket access first
+      try {
+        const bucket = this.storage.bucket(this.bucketName);
+        const [bucketExists] = await bucket.exists();
+        
+        if (!bucketExists) {
+          this.logger.error(`Bucket ${this.bucketName} does not exist`);
+          throw new BadRequestException(`Storage bucket ${this.bucketName} does not exist`);
+        }
+        
+        this.logger.log(`Bucket ${this.bucketName} exists and is accessible`);
+      } catch (bucketError) {
+        this.logger.error('Bucket access error:', bucketError);
+        throw new BadRequestException(`Cannot access storage bucket: ${bucketError.message}`);
+      }
+
+      // Get the bucket and file reference
       const bucket = this.storage.bucket(this.bucketName);
       const fileUpload = bucket.file(filename);
 
@@ -67,14 +95,23 @@ export class UploadService {
         resumable: false,
       });
 
+      this.logger.log('Created write stream, starting upload...');
+
       return new Promise((resolve, reject) => {
         stream.on('error', (error) => {
-          this.logger.error('Failed to upload to GCS:', error);
-          reject(new BadRequestException('Failed to upload file to cloud storage'));
+          this.logger.error('Stream error during upload:', {
+            error: error.message,
+            code: (error as any).code,
+            details: (error as any).details,
+            stack: error.stack
+          });
+          reject(new BadRequestException(`Failed to upload file to cloud storage: ${error.message}`));
         });
 
         stream.on('finish', async () => {
           try {
+            this.logger.log('Upload stream finished, making file public...');
+            
             // Make the file publicly readable
             await fileUpload.makePublic();
             
@@ -83,21 +120,36 @@ export class UploadService {
             this.logger.log(`Successfully uploaded file to GCS: ${publicUrl}`);
             resolve(publicUrl);
           } catch (error) {
-            this.logger.error('Failed to make file public:', error);
-            reject(new BadRequestException('Failed to make uploaded file accessible'));
+            this.logger.error('Failed to make file public:', {
+              error: error.message,
+              code: (error as any).code,
+              details: (error as any).details
+            });
+            reject(new BadRequestException(`Failed to make uploaded file accessible: ${error.message}`));
           }
         });
 
         // Upload the file buffer
-        if (file.buffer) {
+        try {
+          this.logger.log(`Writing buffer to stream (${file.buffer.length} bytes)`);
           stream.end(file.buffer);
-        } else {
-          reject(new BadRequestException('No file buffer available'));
+        } catch (writeError) {
+          this.logger.error('Error writing buffer to stream:', writeError);
+          reject(new BadRequestException(`Failed to write file data: ${writeError.message}`));
         }
       });
     } catch (error) {
-      this.logger.error('Failed to upload file:', error);
-      throw new BadRequestException('Failed to upload file');
+      this.logger.error('Upload service error:', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      throw new BadRequestException(`Failed to upload file: ${error.message}`);
     }
   }
 } 

@@ -24,7 +24,7 @@ import { UserRole } from '../common/enums/role.enum';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { AnnotationStatus } from './entities/retraining.entity';
 
-@ApiTags('Retraining & Datasets')
+@ApiTags('👨‍💼 Admin - Retraining & Datasets')
 @Controller('retraining')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)

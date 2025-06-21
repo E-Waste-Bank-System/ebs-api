@@ -70,8 +70,36 @@ export class CreateArticleDto {
     default: ArticleStatus.DRAFT,
   })
   @IsOptional()
-  @IsEnum(ArticleStatus)
+  @IsEnum(ArticleStatus, {
+    message: 'status must be one of the following values: draft, published, archived'
+  })
+  @Transform(({ value }) => {
+    // Handle string inputs and convert to proper enum values
+    if (typeof value === 'string') {
+      const lowerValue = value.toLowerCase();
+      if (Object.values(ArticleStatus).includes(lowerValue as ArticleStatus)) {
+        return lowerValue as ArticleStatus;
+      }
+    }
+    return value;
+  })
   status?: ArticleStatus = ArticleStatus.DRAFT;
+
+  @ApiPropertyOptional({
+    description: 'SEO meta title',
+    example: 'E-Waste Recycling Guide - Complete Tutorial',
+  })
+  @IsOptional()
+  @IsString()
+  meta_title?: string;
+
+  @ApiPropertyOptional({
+    description: 'SEO meta description',
+    example: 'Comprehensive guide to e-waste recycling and disposal.',
+  })
+  @IsOptional()
+  @IsString()
+  meta_description?: string;
 }
 
 export class UpdateArticleDto extends PartialType(CreateArticleDto) {}
@@ -112,6 +140,32 @@ export class ArticleResponseDto {
 
   @ApiPropertyOptional()
   published_at?: Date;
+
+  @ApiPropertyOptional()
+  is_featured?: boolean;
+
+  @ApiPropertyOptional()
+  meta_title?: string;
+
+  @ApiPropertyOptional()
+  meta_description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Article author information',
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      email: { type: 'string' },
+      name: { type: 'string' },
+      role: { type: 'string' }
+    }
+  })
+  author?: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+  };
 }
 
 export class ArticleListDto {

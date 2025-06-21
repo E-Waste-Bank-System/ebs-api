@@ -20,7 +20,7 @@ import { UserRole } from '../common/enums/role.enum';
 import { PaginationDto, PaginatedResponse } from '../common/dto/pagination.dto';
 import { ValidateObjectDto, CreateObjectDto } from './dto/object.dto';
 
-@ApiTags('Objects')
+@ApiTags('🔍 E-Waste Objects')
 @Controller('objects')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
@@ -63,7 +63,7 @@ export class ObjectsController {
   }
 }
 
-@ApiTags('Admin - Objects')
+@ApiTags('👨‍💼 Admin - Objects')
 @Controller('admin/objects')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)

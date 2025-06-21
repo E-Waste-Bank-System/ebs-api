@@ -17,7 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { ErrorResponseDto } from '../common/dto/response.dto';
 
-@ApiTags('File Upload')
+@ApiTags('📁 File Upload')
 @Controller('upload')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
@@ -30,36 +30,46 @@ export class UploadController {
   @ApiOperation({ 
     summary: 'Upload file to cloud storage',
     description: `
-      Upload files to Google Cloud Storage and get a public URL.
+      Upload files to Google Cloud Storage and receive a public URL.
       
-      **Supported file types:**
-      - Images: JPG, JPEG, PNG, GIF, WebP
-      - Documents: PDF
+      **Supported File Types:**
+      - **Images**: JPG, JPEG, PNG, GIF, WebP
+      - **Documents**: PDF, TXT
+      
+      **Specifications:**
       - Maximum file size: 10MB
+      - Files are stored in Google Cloud Storage
+      - Public URLs returned for immediate access
+      - Automatic content type detection
       
-      **Usage:**
-      - For article featured images
-      - For user avatars
-      - For general file storage needs
+      **Use Cases:**
+      - Article featured images
+      - User profile avatars  
+      - Document attachments
+      - General file storage needs
       
-      The file will be stored in Google Cloud Storage and a public URL will be returned.
+      **Storage Organization:**
+      Files can be organized using the optional \`path\` parameter to specify
+      custom folders (e.g., 'articles/featured-images', 'profiles/avatars').
     `
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    description: 'File upload with optional path',
+    description: 'File upload with optional path organization',
     schema: {
       type: 'object',
       properties: {
         file: {
           type: 'string',
           format: 'binary',
-          description: 'File to upload (max 10MB)'
+          description: 'File to upload (JPG, PNG, GIF, WebP, PDF, TXT - max 10MB)',
+          example: 'featured-image.jpg'
         },
         path: {
           type: 'string',
-          description: 'Optional custom path/folder for the file',
-          example: 'articles/featured-images'
+          description: 'Optional custom folder path for organization',
+          example: 'articles/featured-images',
+          pattern: '^[a-zA-Z0-9/_-]+$'
         }
       },
       required: ['file']
@@ -67,7 +77,7 @@ export class UploadController {
   })
   @ApiResponse({
     status: 201,
-    description: 'File uploaded successfully',
+    description: 'File uploaded successfully to cloud storage',
     schema: {
       type: 'object',
       properties: {
@@ -78,12 +88,21 @@ export class UploadController {
           example: 'https://storage.googleapis.com/ebs-storage/uploads/2024/01/15/image-123.jpg'
         }
       }
+    },
+    example: {
+      url: 'https://storage.googleapis.com/ebs-storage/articles/featured-images/sustainable-tech-guide.jpg'
     }
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - file missing or invalid format',
-    type: ErrorResponseDto
+    description: 'Bad request - file missing, invalid format, or validation error',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: 'File is required',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/upload'
+    }
   })
   @ApiResponse({
     status: 401,
@@ -92,8 +111,25 @@ export class UploadController {
   })
   @ApiResponse({
     status: 413,
-    description: 'File too large - exceeds 10MB limit',
-    type: ErrorResponseDto
+    description: 'Payload too large - file exceeds 10MB limit',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 413,
+      message: 'File too large',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/upload'
+    }
+  })
+  @ApiResponse({
+    status: 415,
+    description: 'Unsupported media type - invalid file format',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 415,
+      message: 'File type not allowed. Only images and PDFs are supported.',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/upload'
+    }
   })
   async uploadFile(
     @UploadedFile() file: any,

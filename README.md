@@ -1,267 +1,297 @@
-# E-Waste Backend Service API
+# EBS API (E-Waste Detection System API)
 
-A comprehensive NestJS backend API for E-Waste scanning and management system with AI integration, role-based access control, and Supabase authentication.
+🚀 **Production API:** `https://ebs-api-981332637673.asia-southeast2.run.app`  
+📋 **Swagger Documentation:** `https://ebs-api-981332637673.asia-southeast2.run.app/api/docs`
 
-## 🚀 Features
+A comprehensive REST API for e-waste detection, management, and recycling education built with NestJS, TypeScript, and PostgreSQL.
 
-- **Authentication & Authorization**: JWT-based auth with Supabase integration
-- **Role-Based Access Control**: User, Admin, and Superadmin roles
-- **E-Waste Scanning**: AI-powered object detection and classification  
-- **Content Management**: Article system for educational content
-- **Admin Dashboard**: Comprehensive analytics and management tools
-- **API Documentation**: Auto-generated OpenAPI/Swagger documentation
-- **Database**: PostgreSQL with TypeORM
-- **Rate Limiting**: Built-in throttling protection
-- **Docker Support**: Production-ready containerization
+## 🌟 Features
 
-## 🛠️ Tech Stack
+- **🔐 Authentication & Authorization** - JWT-based auth with Google OAuth integration
+- **📱 E-Waste Scanning** - AI-powered image analysis for e-waste detection
+- **🔍 Object Detection** - Automated categorization and value estimation
+- **📚 Content Management** - Articles and educational content system
+- **👨‍💼 Admin Dashboard** - Comprehensive administrative interface
+- **🤖 AI Training** - Model retraining and dataset management
+- **☁️ Cloud Storage** - Google Cloud Storage integration
+- **📊 Analytics** - Detailed reporting and statistics
 
-- **Framework**: NestJS
-- **Database**: PostgreSQL + TypeORM
-- **Authentication**: Supabase Auth + JWT
-- **Documentation**: Swagger/OpenAPI
-- **Validation**: class-validator + class-transformer
-- **Rate Limiting**: @nestjs/throttler
-- **Cloud Integration**: Google Cloud Platform
+## 📖 API Documentation Structure
 
-## 📋 Prerequisites
+### Public Endpoints
+- **🏥 Health** - System health and status monitoring
+- **📚 Articles** - Public article reading and discovery
 
-- Node.js 18+
-- PostgreSQL 14+
-- npm or yarn
-- Supabase account
-- Google Cloud account (optional)
+### User Endpoints  
+- **🔐 Authentication** - Login, registration, and token management
+- **📱 E-Waste Scans** - Image upload and AI analysis
+- **🔍 E-Waste Objects** - Object details and management
 
-## 🔧 Setup
+### Admin Endpoints
+- **👨‍💼 Admin - Articles** - Content creation and management
+- **👨‍💼 Admin - Dashboard** - System analytics and overview
+- **👨‍💼 Admin - Objects** - Object validation and correction
+- **👨‍💼 Admin - Profiles** - User management
+- **👨‍💼 Admin - Scans** - System-wide scan monitoring
+- **👨‍💼 Admin - Retraining & Datasets** - AI model management
+- **📁 File Upload** - Cloud storage and asset management
 
-### 1. Environment Configuration
+## 🚀 Quick Start
 
-Create a `.env` file in the root directory:
-
+### Environment Setup
 ```bash
-# Application
-NODE_ENV=development
-PORT=3000
-APP_URL=http://localhost:3000
+# Clone the repository
+git clone <repository-url>
+cd ebs-api
 
-# Database
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_USERNAME=postgres
-DATABASE_PASSWORD=postgres
-DATABASE_NAME=ebs_api
-
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-
-# JWT
-JWT_SECRET=your_jwt_secret_key_here
-JWT_EXPIRES_IN=24h
-
-# Google OAuth (Optional)
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-
-# Google Cloud
-GOOGLE_APPLICATION_CREDENTIALS=./ebs-cloud-456404-472153b611d9.json
-
-# Rate Limiting
-THROTTLE_TTL=60
-THROTTLE_LIMIT=100
-
-# AI API (Configure based on your AI service)
-AI_API_URL=http://localhost:8000
-AI_API_KEY=your_ai_api_key
-```
-
-### 2. Installation
-
-```bash
 # Install dependencies
 npm install
 
+# Setup environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# Run database migrations
+npm run migration:run
+
 # Start development server
 npm run start:dev
-
-# Build for production
-npm run build
-
-# Start production server
-npm run start:prod
 ```
 
-### 3. Database Setup
+### Required Environment Variables
+```env
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/ebs_db
 
-The application will automatically create tables on first run in development mode. For production, disable `synchronize` and use migrations.
+# Authentication
+JWT_SECRET=your-super-secret-jwt-key
+JWT_EXPIRES_IN=24h
 
-## 📚 API Documentation
+# Supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-key
 
-Once running, visit:
-- **API Documentation**: http://localhost:3000/api/docs
-- **Health Check**: http://localhost:3000/api/v1/health
+# Google Cloud Storage
+GOOGLE_CLOUD_PROJECT_ID=your-project-id
+GOOGLE_CLOUD_KEY_FILE=path/to/service-account.json
+GOOGLE_CLOUD_STORAGE_BUCKET=your-bucket-name
 
-## 🔐 Authentication
+# AI Service
+AI_SERVICE_URL=https://your-ai-service.run.app
 
-### Login Flow
+# Frontend (where your frontend app runs)
+CLIENT_ORIGIN=http://localhost:3000
 
-1. **Standard Login**: `POST /api/v1/auth/login`
-2. **Google OAuth**: Integration ready (implement frontend flow)
-3. **JWT Token**: Include in Authorization header: `Bearer <token>`
+# Note: Backend API runs on http://localhost:8080
+```
 
-### Role Hierarchy
+## 🔗 API Endpoints Overview
 
-- **User**: Can scan items, view own scans
-- **Admin**: Can manage content, validate scans, view all data
-- **Superadmin**: Full system access including user management
+### 🔐 Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/login` | Email/password authentication |
+| POST | `/auth/token` | Generate token for Google OAuth users |
+| GET | `/auth/profile` | Get current user profile |
+| POST | `/auth/sync-users` | Sync Supabase users to local DB |
 
-## 📊 API Endpoints
+### 📚 Articles (Public)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/articles` | List published articles |
+| GET | `/articles/:slug` | Get article by slug |
 
-### 🔐 Authentication & Profile
-| Endpoint | Method | Description | Access |
-|----------|--------|-------------|---------|
-| `/auth/login` | POST | Login via Supabase JWT or OAuth | Public |
-| `/auth/me` | GET | Get current user profile | Auth |
-| `/profiles/:id` | GET | Get user profile by ID | Admin |
-| `/profiles` | GET | List all profiles | Admin |
-| `/profiles/:id` | PATCH | Update profile | Admin |
-| `/profiles/:id` | DELETE | Soft delete profile | Superadmin |
+### 👨‍💼 Admin - Articles
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/articles` | List all articles (admin) |
+| POST | `/admin/articles` | Create new article |
+| GET | `/admin/articles/:id` | Get article by ID |
+| PATCH | `/admin/articles/:id` | Update article |
+| DELETE | `/admin/articles/:id` | Delete article |
 
-### 📄 Articles
-| Endpoint | Method | Description | Access |
-|----------|--------|-------------|---------|
-| `/articles` | GET | List all articles (paginated) | Public |
-| `/articles/:slug` | GET | Get single article by slug | Public |
-| `/admin/articles` | GET | Admin view of all articles | Admin |
-| `/admin/articles` | POST | Create new article | Admin |
-| `/admin/articles/:id` | PATCH | Edit article | Admin |
-| `/admin/articles/:id` | DELETE | Soft delete article | Admin |
+### 📱 E-Waste Scans
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/scans` | Upload image for AI scanning |
+| GET | `/scans` | Get user's scan history |
+| GET | `/scans/:id` | Get detailed scan results |
+| DELETE | `/scans/:id` | Delete scan |
 
-### 📦 E-Waste Scans
-| Endpoint | Method | Description | Access |
-|----------|--------|-------------|---------|
-| `/scans` | GET | Get current user scan history | User |
-| `/scans/:id` | GET | Get specific scan with objects | User |
-| `/scans` | POST | Upload scan image → triggers AI pipeline | User |
-| `/admin/scans` | GET | Admin dashboard: list all scans | Admin |
-| `/admin/scans/:id` | GET | Detail view of scan & detected objects | Admin |
+### 🔍 E-Waste Objects
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/objects` | List detected objects |
+| GET | `/objects/:id` | Get object details |
 
-### 🔍 Objects (Detected Items)
-| Endpoint | Method | Description | Access |
-|----------|--------|-------------|---------|
-| `/objects/:id` | GET | Get object detail | User |
-| `/admin/objects/:id/validate` | PATCH | Validate object | Admin |
-| `/admin/objects/:id/reject` | PATCH | Reject or mark as invalid | Admin |
-| `/admin/objects` | GET | Filtered list of detected objects | Admin |
+### 👨‍💼 Admin - Objects
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/objects` | Admin view of all objects |
+| POST | `/admin/objects` | Create manual object entry |
+| PATCH | `/admin/objects/:id/validate` | Validate object |
+| PATCH | `/admin/objects/:id/reject` | Reject object |
 
-### 🔁 Retraining Data
-| Endpoint | Method | Description | Access |
-|----------|--------|-------------|---------|
-| `/retraining` | POST | Submit validated/corrected data | Admin |
-| `/admin/retraining` | GET | Admin view of retraining samples | Admin |
+### 📁 File Upload
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/upload` | General file upload |
+| POST | `/upload/article-image` | Article featured image upload |
 
-### 📊 Dashboard & Stats
-| Endpoint | Method | Description | Access |
-|----------|--------|-------------|---------|
-| `/admin/dashboard` | GET | Summary (scan count, categories, trends) | Admin |
-| `/admin/stats/objects` | GET | Breakdown by category, risk, etc. | Admin |
+### 👨‍💼 Admin - Dashboard
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin/dashboard` | System statistics |
+| GET | `/admin/dashboard/stats/objects` | Object statistics |
+| GET | `/admin/dashboard/activity` | Recent activity |
 
-## 🤖 AI Integration Flow
+### 🏥 Health
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | System health check |
+| GET | `/health/db` | Database health check |
 
-1. **Upload**: User uploads image via `/scans` endpoint
-2. **Processing**: Background job processes image with AI pipeline:
-   - **YOLOv11**: Object detection and bounding boxes
-   - **Gemini**: Enhanced classification and risk assessment  
-   - **KNR**: Value estimation and recycling recommendations
-3. **Storage**: Detected objects saved with validation status
-4. **Validation**: Admin can validate/correct AI predictions
-5. **Retraining**: Corrections feed back into AI improvement
+## 🔧 Recent Updates
 
-## 🔒 Security Features
+### ✅ Fixed Issues
+1. **Swagger Tags Organization** - Cleaned up duplicate and inconsistent API tags
+2. **Article Slug Uniqueness** - Fixed duplicate slug generation with auto-incrementing
+3. **Article Status Validation** - Improved enum validation with transform handling
+4. **Article Image Upload** - Added dedicated `/upload/article-image` endpoint
+5. **Error Handling** - Enhanced validation error messages
 
-- **JWT Authentication**: Secure token-based auth
-- **Rate Limiting**: Configurable request throttling
-- **Role-Based Access**: Granular permission system
-- **Input Validation**: Comprehensive DTO validation
-- **Error Handling**: Standardized error responses
-- **CORS Protection**: Configurable cross-origin policies
+### 🔄 API Tag Structure
+- **🏥 Health** - System monitoring
+- **🔐 Authentication** - Auth endpoints  
+- **📚 Articles** - Public content
+- **📱 E-Waste Scans** - User scanning
+- **🔍 E-Waste Objects** - Object management
+- **📁 File Upload** - Asset management
+- **👨‍💼 Admin - [Feature]** - Administrative functions
 
-## 🐳 Docker Deployment
+## 📊 Data Models
 
+### Article
+```typescript
+interface Article {
+  id: string;
+  title: string;
+  slug: string; // Auto-generated, unique
+  content: EditorJS.OutputData | string;
+  excerpt?: string;
+  featured_image?: string;
+  status: 'draft' | 'published' | 'archived';
+  tags: string[];
+  view_count: number;
+  author_id: string;
+  created_at: Date;
+  updated_at: Date;
+  published_at?: Date;
+}
+```
+
+### Scan
+```typescript
+interface Scan {
+  id: string;
+  image_url: string;
+  status: 'processing' | 'completed' | 'failed';
+  objects_count: number;
+  total_estimated_value: number;
+  user_id: string;
+  created_at: Date;
+  processed_at?: Date;
+  error_message?: string;
+}
+```
+
+### DetectedObject
+```typescript
+interface DetectedObject {
+  id: string;
+  name?: string;
+  category: string;
+  confidence_score: number;
+  estimated_value?: number;
+  bounding_box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  risk_level: number;
+  damage_level: number;
+  is_validated: boolean;
+  scan_id: string;
+}
+```
+
+## 🛠️ Development
+
+### Available Scripts
 ```bash
-# Build image
-docker build -t ebs-api .
-
-# Run container
-docker run -p 3000:3000 --env-file .env ebs-api
-
-# Using docker-compose (recommended)
-docker-compose up -d
+npm run start:dev      # Development server with hot reload
+npm run start:prod     # Production server
+npm run build          # Build the application
+npm run test           # Run unit tests
+npm run test:e2e       # Run end-to-end tests
+npm run migration:generate  # Generate new migration
+npm run migration:run       # Run pending migrations
 ```
 
-## 🧪 Testing
-
-```bash
-# Unit tests
-npm run test
-
-# E2E tests  
-npm run test:e2e
-
-# Test coverage
-npm run test:cov
+### Code Structure
+```
+src/
+├── articles/          # Article management
+├── auth/             # Authentication & authorization
+├── common/           # Shared utilities and DTOs
+├── dashboard/        # Admin dashboard
+├── health/           # Health check endpoints
+├── objects/          # E-waste object management
+├── profiles/         # User profile management
+├── retraining/       # AI model retraining
+├── scans/           # E-waste scanning
+├── supabase/        # Supabase integration
+├── upload/          # File upload handling
+└── main.ts          # Application entry point
 ```
 
-## 📈 Monitoring & Logging
+## 🌐 Production Deployment
 
-- **Health Checks**: Built-in health check endpoints
-- **Structured Logging**: JSON-formatted logs
-- **Error Tracking**: Global exception handling
-- **Performance Metrics**: Request timing and throughput
+The API is deployed on Google Cloud Run with:
+- **Auto-scaling** based on traffic
+- **HTTPS** encryption
+- **Global CDN** via Google Cloud
+- **Database** on Supabase PostgreSQL
+- **File Storage** on Google Cloud Storage
+- **AI Processing** on dedicated Cloud Run service
 
-## 🔧 Development
+## 📱 Mobile App Integration
 
-### Adding New Modules
-
-1. Generate module: `nest g module feature-name`
-2. Generate controller: `nest g controller feature-name`
-3. Generate service: `nest g service feature-name`
-4. Create DTOs and entities
-5. Add to main AppModule
-
-### Database Migrations
-
-```bash
-# Generate migration
-npm run typeorm migration:generate -- -n MigrationName
-
-# Run migrations
-npm run typeorm migration:run
-
-# Revert migration
-npm run typeorm migration:revert
-```
+This API serves the EBS mobile application with:
+- **Real-time scanning** results
+- **Offline capability** support
+- **Push notifications** for processing updates
+- **Article synchronization**
+- **User analytics** and insights
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Run tests
+5. Submit a pull request
 
-## 📝 License
+## 📄 License
 
-This project is licensed under the MIT License.
-
-## 🆘 Support
-
-For support and questions:
-- Create an issue on GitHub
-- Contact the development team
-- Check the API documentation at `/api/docs`
+This project is proprietary software for the EBS (E-Waste Detection System) platform.
 
 ---
 
-**Built with ❤️ using NestJS** 
+**🔗 Links:**
+- [Live API](https://ebs-api-981332637673.asia-southeast2.run.app)
+- [Swagger Docs](https://ebs-api-981332637673.asia-southeast2.run.app/api/docs)
+- [Frontend App](https://ewastehub.netlify.app)
+
+**📧 Support:** Contact the development team for API access and integration support. 

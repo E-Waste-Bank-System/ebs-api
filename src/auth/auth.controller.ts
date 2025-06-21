@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto, GenerateTokenDto, AuthResponseDto } from './dto/auth.dto';
@@ -11,7 +11,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { GetUser } from './decorators/get-user.decorator';
 import { ErrorResponseDto } from '../common/dto/response.dto';
 
-@ApiTags('Authentication')
+@ApiTags('🔐 Authentication')
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
 export class AuthController {
@@ -20,18 +20,68 @@ export class AuthController {
   @Post('login')
   @Public()
   @ApiOperation({ 
-    summary: 'Email/password login',
-    description: 'Authenticate user with email and password credentials. Returns JWT token for API access.'
+    summary: 'Login with email and password',
+    description: `
+      Authenticate user with email and password credentials. Returns JWT token for API access.
+      
+      **Login Flow:**
+      1. User provides email and password
+      2. System validates credentials against Supabase Auth
+      3. Creates or updates local user profile
+      4. Returns JWT token and user information
+      
+      **Token Usage:**
+      Use the returned access_token in the Authorization header for subsequent requests:
+      \`Authorization: Bearer <access_token>\`
+    `
+  })
+  @ApiBody({
+    type: LoginDto,
+    examples: {
+      admin: {
+        summary: 'Admin Login',
+        description: 'Login as administrator',
+        value: {
+          email: 'admin@ebs.com',
+          password: 'admin123'
+        }
+      },
+      user: {
+        summary: 'Regular User Login',
+        description: 'Login as regular user',
+        value: {
+          email: 'user@example.com',
+          password: 'password123'
+        }
+      }
+    }
   })
   @ApiResponse({ 
     status: 200, 
     description: 'Login successful - JWT token and user profile returned',
-    type: AuthResponseDto
+    type: AuthResponseDto,
+    example: {
+      access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      user: {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        email: 'user@example.com',
+        full_name: 'John Doe',
+        role: 'USER',
+        avatar_url: 'https://example.com/avatar.jpg'
+      }
+    }
   })
   @ApiResponse({ 
     status: 401, 
     description: 'Invalid credentials - email or password incorrect',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Invalid credentials',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/login'
+    }
   })
   @ApiResponse({ 
     status: 429, 
@@ -45,19 +95,33 @@ export class AuthController {
   @Post('token')
   @Public()
   @ApiOperation({ 
-    summary: 'Generate token for Google sign-in users',
+    summary: 'Generate token for Google OAuth users',
     description: `
-      Generate a JWT access token for users who have authenticated via Google OAuth through Supabase Auth.
+      Generate a JWT access token for users authenticated via Google OAuth through Supabase Auth.
       
-      **Usage Flow:**
+      **Google OAuth Flow:**
       1. User signs in with Google via Supabase Auth (frontend)
-      2. Frontend receives Supabase user ID
+      2. Frontend receives Supabase user ID from OAuth callback
       3. Frontend calls this endpoint with the user_id
       4. Backend validates user exists in Supabase and creates/updates local profile
       5. Returns JWT token for API authentication
       
-      This endpoint bridges Google OAuth authentication with the EBS API token system.
+      **Integration:**
+      This endpoint bridges Google OAuth authentication with the EBS API token system,
+      enabling seamless integration between Supabase Auth and the NestJS backend.
     `
+  })
+  @ApiBody({
+    type: GenerateTokenDto,
+    examples: {
+      googleUser: {
+        summary: 'Google OAuth User',
+        description: 'Generate token for Google authenticated user',
+        value: {
+          user_id: '550e8400-e29b-41d4-a716-446655440000'
+        }
+      }
+    }
   })
   @ApiResponse({ 
     status: 200, 
@@ -91,13 +155,13 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        id: { type: 'string', format: 'uuid' },
-        email: { type: 'string', format: 'email' },
-        full_name: { type: 'string' },
-        avatar_url: { type: 'string', format: 'uri' },
-        role: { type: 'string', enum: ['user', 'admin', 'superadmin'] },
-        is_active: { type: 'boolean' },
-        email_verified: { type: 'boolean' },
+        id: { type: 'string', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' },
+        email: { type: 'string', format: 'email', example: 'user@example.com' },
+        full_name: { type: 'string', example: 'John Doe' },
+        avatar_url: { type: 'string', format: 'uri', example: 'https://example.com/avatar.jpg' },
+        role: { type: 'string', enum: ['USER', 'ADMIN', 'SUPERADMIN'], example: 'USER' },
+        is_active: { type: 'boolean', example: true },
+        email_verified: { type: 'boolean', example: true },
         created_at: { type: 'string', format: 'date-time' },
         updated_at: { type: 'string', format: 'date-time' },
         last_login_at: { type: 'string', format: 'date-time' }
@@ -117,7 +181,7 @@ export class AuthController {
   @Public()
   @ApiOperation({ 
     summary: 'Debug JWT configuration',
-    description: 'Development endpoint to debug JWT token configuration and settings'
+    description: '🔧 Development endpoint to debug JWT token configuration and settings'
   })
   @ApiResponse({ 
     status: 200, 
@@ -125,10 +189,10 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        jwtSecretConfigured: { type: 'boolean' },
-        jwtSecretLength: { type: 'number' },
-        expiresIn: { type: 'string' },
-        environment: { type: 'string' }
+        hasJwtSecret: { type: 'boolean', example: true },
+        jwtSecretLength: { type: 'number', example: 64 },
+        jwtSecretPreview: { type: 'string', example: 'supersecret...' },
+        nodeEnv: { type: 'string', example: 'development' }
       }
     }
   })
@@ -140,7 +204,20 @@ export class AuthController {
   @Public()
   @ApiOperation({ 
     summary: 'Verify JWT token manually',
-    description: 'Manually verify the validity of a JWT token - useful for debugging and testing'
+    description: '🔧 Manually verify the validity of a JWT token - useful for debugging and testing'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        token: { 
+          type: 'string', 
+          description: 'JWT token to verify',
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+        }
+      },
+      required: ['token']
+    }
   })
   @ApiResponse({ 
     status: 200, 
@@ -148,10 +225,18 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        valid: { type: 'boolean' },
-        decoded: { type: 'object' },
-        message: { type: 'string' },
-        error: { type: 'string' }
+        valid: { type: 'boolean', example: true },
+        decoded: { 
+          type: 'object',
+          properties: {
+            sub: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
+            email: { type: 'string', example: 'user@example.com' },
+            role: { type: 'string', example: 'USER' },
+            iat: { type: 'number', example: 1642618800 },
+            exp: { type: 'number', example: 1642705200 }
+          }
+        },
+        message: { type: 'string', example: 'Token is valid' }
       }
     }
   })
@@ -174,6 +259,11 @@ export class AuthController {
       - Creates missing profiles in local database
       - Updates existing profiles with latest data
       - Cleans up invalid entries
+      
+      **Use Cases:**
+      - Initial data migration
+      - Sync after bulk user operations
+      - Recovery from data inconsistencies
     `
   })
   @ApiResponse({ 
@@ -182,10 +272,10 @@ export class AuthController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string' },
-        syncedCount: { type: 'number' },
-        skippedCount: { type: 'number' },
-        totalUsers: { type: 'number' }
+        message: { type: 'string', example: 'User sync completed successfully' },
+        synced: { type: 'number', example: 15 },
+        skipped: { type: 'number', example: 3 },
+        total: { type: 'number', example: 18 }
       }
     }
   })

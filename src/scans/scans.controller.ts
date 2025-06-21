@@ -13,7 +13,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes, ApiBody, ApiParam, ApiQuery } from '@nestjs/swagger';
 
 import { ScansService } from './scans.service';
 import { CreateScanDto, ScanResponseDto, ScanDetailDto, ScanListQueryDto, DeleteScanResponseDto } from './dto/scan.dto';
@@ -23,8 +23,9 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { PaginatedResponse } from '../common/dto/pagination.dto';
+import { ErrorResponseDto } from '../common/dto/response.dto';
 
-@ApiTags('E-Waste Scans')
+@ApiTags('📱 E-Waste Scans')
 @Controller('scans')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
@@ -39,23 +40,21 @@ export class ScansController {
     description: `
       Upload an image containing e-waste items for AI-powered detection and categorization.
       
-      **Process:**
-      1. Upload image (JPG, PNG, WebP supported)
+      **AI Detection Process:**
+      1. Upload image (JPG, PNG, WebP supported, max 10MB)
       2. AI analyzes the image to detect e-waste objects
       3. Each object is categorized and estimated for value
       4. Results include object details, categories, and total estimated value
       
-      **Image Requirements:**
-      - Format: JPG, JPEG, PNG, WebP
-      - Max size: 10MB
-      - Clear visibility of e-waste items
-      - Good lighting recommended
+      **Supported Formats:** JPG, JPEG, PNG, WebP
+      **Max File Size:** 10MB
+      **Processing Time:** 10-30 seconds depending on image complexity
       
-      **AI Detection:**
-      - Identifies individual e-waste objects
-      - Categorizes by type (electronics, appliances, etc.)
-      - Estimates monetary value
-      - Provides confidence scores
+      **Detection Capabilities:**
+      - Electronics (phones, laptops, tablets)
+      - Appliances (refrigerators, washing machines)
+      - Components (batteries, circuit boards)
+      - Value estimation in Indonesian Rupiah (IDR)
     `
   })
   @ApiConsumes('multipart/form-data')
@@ -67,12 +66,13 @@ export class ScansController {
         file: {
           type: 'string',
           format: 'binary',
-          description: 'E-waste image file (JPG, PNG, WebP, max 10MB)'
+          description: 'E-waste image file (JPG, PNG, WebP, max 10MB)',
+          example: 'e-waste-photo.jpg'
         },
         original_filename: {
           type: 'string',
-          description: 'Optional custom filename',
-          example: 'my-e-waste-scan.jpg'
+          description: 'Optional custom filename for reference',
+          example: 'my-electronics-collection.jpg'
         }
       },
       required: ['file']
@@ -82,29 +82,29 @@ export class ScansController {
     status: 201,
     description: 'Scan created successfully - AI processing initiated',
     type: ScanResponseDto,
+    example: {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      image_url: 'https://storage.googleapis.com/ebs-storage/scans/scan-123.jpg',
+      status: 'processing',
+      objects_count: 0,
+      total_estimated_value: 0,
+      created_at: '2024-01-15T10:30:00.000Z'
+    }
   })
   @ApiResponse({
     status: 400,
-    description: 'Bad request - image file missing or invalid format',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 400 },
-        message: { type: 'string', example: 'Image file is required' },
-        timestamp: { type: 'string', format: 'date-time' }
-      }
-    }
+    description: 'Bad request - invalid file or missing required fields',
+    type: ErrorResponseDto
   })
   @ApiResponse({
     status: 401,
     description: 'Unauthorized - authentication required',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 401 },
-        message: { type: 'string', example: 'Unauthorized' }
-      }
-    }
+    type: ErrorResponseDto
+  })
+  @ApiResponse({
+    status: 413,
+    description: 'File too large - exceeds 10MB limit',
+    type: ErrorResponseDto
   })
   async create(
     @UploadedFile() file: any,
@@ -153,26 +153,23 @@ export class ScansController {
   @Get()
   @Roles(UserRole.USER, UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
-    summary: 'Get user scan history',
+    summary: 'Get scan history',
     description: `
       Retrieve paginated list of scans for the current user.
       
-      **User Access:**
+      **Access Control:**
       - Regular users see only their own scans
-      - Admins can see all scans by omitting user filtering
+      - Admins can see all scans (use admin endpoints)
       
-      **Filtering Options:**
-      - Status: Filter by processing status (pending, completed, failed)
-      - Date range: Filter by creation date
-      - Pagination: Control page size and offset
-      
-      **Response includes:**
-      - Scan metadata (ID, status, creation date)
-      - Object count and total estimated value
-      - Image URL for viewing
-      - Error messages if processing failed
+      **Scan Status:**
+      - \`processing\` - AI is analyzing the image
+      - \`completed\` - Analysis complete, results available
+      - \`failed\` - Processing failed, check error_message
     `
   })
+  @ApiQuery({ name: 'page', required: false, example: 1, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, example: 20, description: 'Items per page' })
+  @ApiQuery({ name: 'status', required: false, enum: ['processing', 'completed', 'failed'], description: 'Filter by status' })
   @ApiResponse({
     status: 200,
     description: 'Scan history retrieved successfully',
@@ -186,10 +183,10 @@ export class ScansController {
         meta: {
           type: 'object',
           properties: {
-            total: { type: 'number' },
-            page: { type: 'number' },
-            limit: { type: 'number' },
-            totalPages: { type: 'number' }
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 20 },
+            total: { type: 'number', example: 45 },
+            pages: { type: 'number', example: 3 }
           }
         }
       }
@@ -197,7 +194,8 @@ export class ScansController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - authentication required'
+    description: 'Unauthorized - authentication required',
+    type: ErrorResponseDto
   })
   async findAll(
     @Query() query: ScanListQueryDto,
@@ -230,44 +228,63 @@ export class ScansController {
     description: `
       Retrieve detailed information about a specific scan including all detected objects.
       
-      **Access Control:**
-      - Users can only access their own scans
-      - Admins can access any scan
-      
-      **Detailed Information:**
+      **Includes:**
       - Complete scan metadata
       - All detected objects with details:
-        - Object category and name
-        - Confidence score
-        - Estimated value
-        - Bounding box coordinates
-        - Validation status
-      - Processing status and any error messages
-      - User information (for admin access)
+        - Object category and confidence score
+        - Estimated value in IDR
+        - Bounding box coordinates for object location
+        - AI-generated suggestions and risk assessments
+      - Processing status and error messages (if any)
       
-      **Use Cases:**
-      - View scan results after processing
-      - Review detected objects for accuracy
-      - Check processing status and errors
-      - Admin monitoring and validation
+      **Object Details:**
+      Each detected object includes category, estimated value, confidence score,
+      and bounding box coordinates for precise location in the image.
     `
+  })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'Scan UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000'
   })
   @ApiResponse({
     status: 200,
     description: 'Detailed scan information with all detected objects',
     type: ScanDetailDto,
+    example: {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      image_url: 'https://storage.googleapis.com/ebs-storage/scans/scan-123.jpg',
+      status: 'completed',
+      objects_count: 3,
+      total_estimated_value: 750000,
+      created_at: '2024-01-15T10:30:00.000Z',
+      user_id: '456e7890-e89b-12d3-a456-426614174000',
+      objects: [
+        {
+          id: '789e0123-e89b-12d3-a456-426614174000',
+          name: 'Laptop',
+          category: 'Laptop',
+          confidence_score: 0.95,
+          estimated_value: 500000,
+          bounding_box: { x: 0.1, y: 0.2, width: 0.4, height: 0.3 }
+        }
+      ]
+    }
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - authentication required'
+    description: 'Unauthorized - authentication required',
+    type: ErrorResponseDto
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - cannot access other users\' scans'
+    description: 'Forbidden - cannot access other users\' scans',
+    type: ErrorResponseDto
   })
   @ApiResponse({
     status: 404,
-    description: 'Scan not found'
+    description: 'Scan not found',
+    type: ErrorResponseDto
   })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
@@ -296,48 +313,51 @@ export class ScansController {
   @Delete(':id')
   @Roles(UserRole.USER, UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
-    summary: 'Delete a scan',
+    summary: 'Delete scan',
     description: `
       Delete a scan and all its associated data.
       
-      **Access Control:**
-      - Users can only delete their own scans
-      - Admins can delete any scan
+      **⚠️ Warning:** This action is irreversible!
       
       **What gets deleted:**
       - Scan record from database
       - All detected objects associated with the scan
       - Image file from cloud storage
-      - All related metadata
+      - All related metadata and processing history
       
-      **Important Notes:**
-      - This action is irreversible
-      - Associated retraining data will also be removed
-      - Processing status doesn't matter - any scan can be deleted
-      
-      **Use Cases:**
-      - Remove unwanted or duplicate scans
-      - Clean up failed scans
-      - User privacy - delete personal data
-      - Admin moderation - remove inappropriate content
+      **Access Control:**
+      - Users can only delete their own scans
+      - Admins can delete any scan
     `
+  })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'Scan UUID to delete',
+    example: '123e4567-e89b-12d3-a456-426614174000'
   })
   @ApiResponse({
     status: 200,
     description: 'Scan deleted successfully',
     type: DeleteScanResponseDto,
+    example: {
+      message: 'Scan deleted successfully',
+      deletedScanId: '123e4567-e89b-12d3-a456-426614174000'
+    }
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - authentication required'
+    description: 'Unauthorized - authentication required',
+    type: ErrorResponseDto
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - cannot delete other users\' scans'
+    description: 'Forbidden - cannot delete other users\' scans',
+    type: ErrorResponseDto
   })
   @ApiResponse({
     status: 404,
-    description: 'Scan not found'
+    description: 'Scan not found',
+    type: ErrorResponseDto
   })
   async delete(
     @Param('id', ParseUUIDPipe) id: string,
@@ -359,22 +379,15 @@ export class ScansController {
   @ApiOperation({ 
     summary: 'Recalculate totals for all scans',
     description: `
-      **🔒 Admin Only**
+      **🔒 Admin Only Operation**
       
-      Recalculates the object count and total estimated value for all scans.
-      This is useful for fixing data inconsistencies where scan totals don't match
-      the actual objects in the database.
+      Recalculates object count and total estimated value for all scans.
+      Useful for fixing data inconsistencies or after system maintenance.
       
-      **Use Cases:**
-      - Data migration or cleanup
+      **When to use:**
+      - After data migration
       - Fixing inconsistencies after manual database changes
-      - Recovering from bugs in total calculation
-      
-      **Process:**
-      - Iterates through all scans in the system
-      - Counts actual objects for each scan
-      - Sums up estimated values
-      - Updates scan records with correct totals
+      - Recovering from calculation bugs
     `
   })
   @ApiResponse({
@@ -394,12 +407,13 @@ export class ScansController {
 
   @Post(':id/recalculate-totals')
   @ApiOperation({ 
-    summary: 'Recalculate totals for a specific scan',
-    description: `
-      **🔒 Admin Only**
-      
-      Recalculates the object count and total estimated value for a specific scan.
-    `
+    summary: 'Recalculate totals for specific scan',
+    description: 'Recalculate object count and total estimated value for a specific scan'
+  })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'Scan UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000'
   })
   @ApiResponse({
     status: 200,
@@ -417,7 +431,7 @@ export class ScansController {
   }
 }
 
-@ApiTags('Admin - Scans')
+@ApiTags('👨‍💼 Admin - Scans')
 @Controller('admin/scans')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
@@ -436,15 +450,9 @@ export class AdminScansController {
       **Features:**
       - View all user scans across the platform
       - Filter by user, status, date range
-      - Monitor processing performance
+      - Monitor AI processing performance
       - Identify failed scans requiring attention
       - User information included for each scan
-      
-      **Monitoring Capabilities:**
-      - Track AI processing success rates
-      - Identify common failure patterns
-      - Monitor system usage and load
-      - User activity analysis
       
       **Use Cases:**
       - System health monitoring
@@ -453,6 +461,10 @@ export class AdminScansController {
       - Quality assurance
     `
   })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiQuery({ name: 'status', required: false, enum: ['processing', 'completed', 'failed'] })
+  @ApiQuery({ name: 'user_id', required: false, description: 'Filter by specific user' })
   @ApiResponse({
     status: 200,
     description: 'Complete list of all scans with admin-level details',
@@ -466,10 +478,10 @@ export class AdminScansController {
         meta: {
           type: 'object',
           properties: {
-            total: { type: 'number' },
             page: { type: 'number' },
             limit: { type: 'number' },
-            totalPages: { type: 'number' }
+            total: { type: 'number' },
+            pages: { type: 'number' }
           }
         }
       }
@@ -477,11 +489,13 @@ export class AdminScansController {
   })
   @ApiResponse({
     status: 401,
-    description: 'Unauthorized - authentication required'
+    description: 'Unauthorized - authentication required',
+    type: ErrorResponseDto
   })
   @ApiResponse({
     status: 403,
-    description: 'Forbidden - admin access required'
+    description: 'Forbidden - admin access required',
+    type: ErrorResponseDto
   })
   async findAll(@Query() query: ScanListQueryDto): Promise<PaginatedResponse<ScanDetailDto>> {
     const result = await this.scansService.findAll(query);
@@ -514,11 +528,19 @@ export class AdminScansController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Detail view of scan & all detected objects' })
+  @ApiOperation({ 
+    summary: 'Admin view of scan details',
+    description: 'Get detailed view of any scan with full admin privileges'
+  })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'Scan UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000'
+  })
   @ApiResponse({
     status: 200,
     description: 'Full scan details for admin',
-    type: ScanDetailDto,
+    type: ScanDetailDto
   })
   async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ScanDetailDto> {
     const scan = await this.scansService.findOne(id);
@@ -538,11 +560,19 @@ export class AdminScansController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Admin delete scan (any scan)' })
+  @ApiOperation({ 
+    summary: 'Admin delete scan',
+    description: 'Delete any scan with admin privileges (no ownership restrictions)'
+  })
+  @ApiParam({ 
+    name: 'id', 
+    description: 'Scan UUID to delete',
+    example: '123e4567-e89b-12d3-a456-426614174000'
+  })
   @ApiResponse({
     status: 200,
     description: 'Scan deleted successfully by admin',
-    type: DeleteScanResponseDto,
+    type: DeleteScanResponseDto
   })
   async delete(@Param('id', ParseUUIDPipe) id: string): Promise<DeleteScanResponseDto> {
     await this.scansService.delete(id);

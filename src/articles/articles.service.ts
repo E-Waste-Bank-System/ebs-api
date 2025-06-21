@@ -15,7 +15,7 @@ export class ArticlesService {
   ) {}
 
   async create(createArticleDto: CreateArticleDto, authorId: string): Promise<Article> {
-    const slug = this.generateSlug(createArticleDto.title);
+    const slug = await this.generateUniqueSlug(createArticleDto.title);
     
     this.logger.log(`Creating article with content type: ${typeof createArticleDto.content}`);
     
@@ -54,7 +54,18 @@ export class ArticlesService {
     const savedArticle = await this.articleRepository.save(article);
     
     this.logger.log(`Article saved with content type: ${typeof savedArticle.content}`);
-    return savedArticle;
+    
+    // Load the article with author relationship
+    const articleWithAuthor = await this.articleRepository.findOne({
+      where: { id: savedArticle.id },
+      relations: ['author'],
+    });
+    
+    if (!articleWithAuthor) {
+      throw new Error('Failed to retrieve saved article');
+    }
+    
+    return articleWithAuthor;
   }
 
   async findAllPublic(query: ArticleQueryDto): Promise<PaginatedResponse<Article>> {
@@ -152,7 +163,7 @@ export class ArticlesService {
 
     // Update slug if title changed
     if (updateArticleDto.title && updateArticleDto.title !== article.title) {
-      article.slug = this.generateSlug(updateArticleDto.title);
+      article.slug = await this.generateUniqueSlug(updateArticleDto.title, id);
     }
 
     // Set published_at if status changed to published
@@ -179,6 +190,32 @@ export class ArticlesService {
       .replace(/\s+/g, '-') // Replace spaces with hyphens
       .replace(/-+/g, '-') // Replace multiple hyphens with single
       .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+  }
+
+  private async generateUniqueSlug(title: string, excludeId?: string): Promise<string> {
+    const baseSlug = this.generateSlug(title);
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (await this.slugExists(slug, excludeId)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
+    return slug;
+  }
+
+  private async slugExists(slug: string, excludeId?: string): Promise<boolean> {
+    const queryBuilder = this.articleRepository
+      .createQueryBuilder('article')
+      .where('article.slug = :slug', { slug });
+
+    if (excludeId) {
+      queryBuilder.andWhere('article.id != :excludeId', { excludeId });
+    }
+
+    const count = await queryBuilder.getCount();
+    return count > 0;
   }
 
   async getPopularArticles(limit: number = 10): Promise<Article[]> {

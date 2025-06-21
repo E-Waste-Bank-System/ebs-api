@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
+import * as fs from 'fs';
 import { Storage } from '@google-cloud/storage';
 
 @Injectable()
@@ -16,21 +17,53 @@ export class UploadService {
     
     // Initialize storage with service account key file
     const keyFilename = this.configService.get('GOOGLE_CLOUD_KEY_FILE') || 'ebs-cloud-456404-472153b611d9.json';
-    const keyFilePath = path.join(process.cwd(), keyFilename);
     const projectId = this.configService.get('GCP_PROJECT_ID') || 'ebs-cloud-456404';
     
+    // Clean up the keyFilename to remove any invalid characters
+    const cleanKeyFilename = keyFilename.replace(/[{}]/g, '');
+    const keyFilePath = path.join(process.cwd(), cleanKeyFilename);
+    
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
+    this.logger.log(`Raw key filename from config: ${keyFilename}`);
+    this.logger.log(`Cleaned key filename: ${cleanKeyFilename}`);
     this.logger.log(`Key file path: ${keyFilePath}`);
     
     try {
-      this.storage = new Storage({
-        keyFilename: keyFilePath,
-        projectId,
-      });
+      // Check if the key file exists
+      if (!fs.existsSync(keyFilePath)) {
+        this.logger.error(`Google Cloud key file not found at: ${keyFilePath}`);
+        
+        // Try to find any .json file in the current directory
+        const files = fs.readdirSync(process.cwd()).filter((f: string) => f.endsWith('.json') && f.includes('ebs-cloud'));
+        this.logger.log(`Available GCP key files in current directory: ${files.join(', ')}`);
+        
+        if (files.length > 0) {
+          const fallbackKeyPath = path.join(process.cwd(), files[0]);
+          this.logger.log(`Using fallback key file: ${fallbackKeyPath}`);
+          
+          this.storage = new Storage({
+            keyFilename: fallbackKeyPath,
+            projectId,
+          });
+        } else {
+          throw new Error(`Google Cloud key file not found. Tried: ${keyFilePath}`);
+        }
+      } else {
+        this.storage = new Storage({
+          keyFilename: keyFilePath,
+          projectId,
+        });
+      }
+      
       this.logger.log('Google Cloud Storage initialized successfully');
     } catch (error) {
-      this.logger.error('Failed to initialize Google Cloud Storage:', error);
-      throw new Error('Google Cloud Storage initialization failed');
+      this.logger.error('Failed to initialize Google Cloud Storage:', {
+        error: error.message,
+        keyFilePath,
+        projectId,
+        bucketName: this.bucketName
+      });
+      throw new Error(`Google Cloud Storage initialization failed: ${error.message}`);
     }
   }
 
@@ -51,6 +84,12 @@ export class UploadService {
 
       if (!file.buffer) {
         throw new BadRequestException('File buffer is missing');
+      }
+
+      // Check if storage is properly initialized
+      if (!this.storage) {
+        this.logger.error('Google Cloud Storage is not initialized');
+        throw new BadRequestException('Cloud storage service is not available');
       }
 
       // Determine the upload path
@@ -74,7 +113,12 @@ export class UploadService {
         
         this.logger.log(`Bucket ${this.bucketName} exists and is accessible`);
       } catch (bucketError) {
-        this.logger.error('Bucket access error:', bucketError);
+        this.logger.error('Bucket access error:', {
+          error: bucketError.message,
+          code: (bucketError as any).code,
+          details: (bucketError as any).details,
+          bucketName: this.bucketName
+        });
         throw new BadRequestException(`Cannot access storage bucket: ${bucketError.message}`);
       }
 

@@ -322,6 +322,46 @@ export class ScansService {
     }
   }
 
+  async recalculateScanTotals(scanId: string): Promise<void> {
+    // Get all objects for this scan
+    const objects = await this.objectRepository.find({
+      where: { scan_id: scanId }
+    });
+
+    // Calculate totals
+    const objectsCount = objects.length;
+    const totalEstimatedValue = objects.reduce((sum, obj) => {
+      const value = parseFloat(obj.estimated_value?.toString() || '0');
+      return sum + (isNaN(value) ? 0 : value);
+    }, 0);
+
+    // Update the scan
+    await this.scanRepository.update(scanId, {
+      objects_count: objectsCount,
+      total_estimated_value: totalEstimatedValue,
+    });
+
+    this.logger.log(`Recalculated totals for scan ${scanId}: ${objectsCount} objects, total value: ${totalEstimatedValue}`);
+  }
+
+  async recalculateAllScanTotals(): Promise<void> {
+    this.logger.log('Starting recalculation of all scan totals...');
+    
+    const scans = await this.scanRepository.find({
+      select: ['id']
+    });
+
+    for (const scan of scans) {
+      try {
+        await this.recalculateScanTotals(scan.id);
+      } catch (error) {
+        this.logger.error(`Failed to recalculate totals for scan ${scan.id}:`, error);
+      }
+    }
+
+    this.logger.log(`Completed recalculation for ${scans.length} scans`);
+  }
+
   private async processWithAI(scanId: string, imageUrl: string) {
     try {
       this.logger.log(`Starting AI processing for scan ${scanId}`);
@@ -362,7 +402,6 @@ export class ScansService {
       this.logger.log(`AI service returned ${aiResult.predictions?.length || 0} predictions`);
 
       // Process AI predictions and save detected objects
-      let totalValue = 0;
       const detectedObjects = [];
 
       for (const prediction of aiResult.predictions || []) {
@@ -390,32 +429,32 @@ export class ScansService {
 
         const savedObject = await this.objectRepository.save(detectedObject);
         detectedObjects.push(savedObject);
-        totalValue += prediction.regression_result || 0;
       }
 
-             // Update scan with results
-       await this.scanRepository.update(scanId, {
-         status: ScanStatus.COMPLETED,
-         processed_at: new Date(),
-         objects_count: detectedObjects.length,
-         total_estimated_value: totalValue,
-         metadata: {
-           ai_service_response: JSON.parse(JSON.stringify(aiResult)),
-           processing_completed_at: new Date().toISOString(),
-         } as any,
-       });
+      // Use the new recalculation method to update scan totals
+      await this.recalculateScanTotals(scanId);
 
-      this.logger.log(`Successfully processed scan ${scanId} with ${detectedObjects.length} objects, total value: ${totalValue}`);
+      // Update scan status and metadata
+      await this.scanRepository.update(scanId, {
+        status: ScanStatus.COMPLETED,
+        processed_at: new Date(),
+        metadata: {
+          ai_service_response: JSON.parse(JSON.stringify(aiResult)),
+          processing_completed_at: new Date().toISOString(),
+        } as any,
+      });
+
+      this.logger.log(`Successfully processed scan ${scanId} with ${detectedObjects.length} objects`);
 
     } catch (error) {
       this.logger.error(`AI processing failed for scan ${scanId}:`, error);
       
-             // Update scan status to failed
-       await this.scanRepository.update(scanId, {
-         status: ScanStatus.FAILED,
-         processed_at: new Date(),
-         error_message: (error as Error).message || 'AI processing failed',
-       });
+      // Update scan status to failed
+      await this.scanRepository.update(scanId, {
+        status: ScanStatus.FAILED,
+        processed_at: new Date(),
+        error_message: (error as Error).message || 'AI processing failed',
+      });
     }
   }
 } 

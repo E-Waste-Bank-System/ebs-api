@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DetectedObject } from './entities/object.entity';
+import { Scan } from '../scans/entities/scan.entity';
 import { PaginationDto, PaginatedResponse } from '../common/dto/pagination.dto';
 import { CreateObjectDto } from './dto/object.dto';
 
@@ -10,6 +11,8 @@ export class ObjectsService {
   constructor(
     @InjectRepository(DetectedObject)
     private objectRepository: Repository<DetectedObject>,
+    @InjectRepository(Scan)
+    private scanRepository: Repository<Scan>,
   ) {}
 
   async findAll(
@@ -103,7 +106,12 @@ export class ObjectsService {
       object.estimated_value = data.corrected_value;
     }
 
-    return await this.objectRepository.save(object);
+    const updatedObject = await this.objectRepository.save(object);
+    
+    // Update scan totals
+    await this.updateScanTotals(object.scan_id);
+    
+    return updatedObject;
   }
 
   async reject(id: string, validatedBy: string, notes?: string): Promise<DetectedObject> {
@@ -114,7 +122,12 @@ export class ObjectsService {
     object.validated_at = new Date();
     object.validation_notes = notes;
 
-    return await this.objectRepository.save(object);
+    const updatedObject = await this.objectRepository.save(object);
+    
+    // Update scan totals
+    await this.updateScanTotals(object.scan_id);
+    
+    return updatedObject;
   }
 
   async create(createObjectDto: CreateObjectDto, createdBy: string): Promise<DetectedObject> {
@@ -135,6 +148,31 @@ export class ObjectsService {
       ai_metadata: { source: 'manual_entry', created_by: createdBy }
     });
 
-    return await this.objectRepository.save(object);
+    const savedObject = await this.objectRepository.save(object);
+    
+    // Update scan totals
+    await this.updateScanTotals(createObjectDto.scan_id);
+    
+    return savedObject;
+  }
+
+  private async updateScanTotals(scanId: string): Promise<void> {
+    // Get all objects for this scan
+    const objects = await this.objectRepository.find({
+      where: { scan_id: scanId }
+    });
+
+    // Calculate totals
+    const objectsCount = objects.length;
+    const totalEstimatedValue = objects.reduce((sum, obj) => {
+      const value = parseFloat(obj.estimated_value?.toString() || '0');
+      return sum + (isNaN(value) ? 0 : value);
+    }, 0);
+
+    // Update the scan
+    await this.scanRepository.update(scanId, {
+      objects_count: objectsCount,
+      total_estimated_value: totalEstimatedValue,
+    });
   }
 } 

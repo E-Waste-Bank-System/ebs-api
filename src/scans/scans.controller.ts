@@ -354,6 +354,67 @@ export class ScansController {
       deletedScanId: id,
     };
   }
+
+  @Post('recalculate-totals')
+  @ApiOperation({ 
+    summary: 'Recalculate totals for all scans',
+    description: `
+      **🔒 Admin Only**
+      
+      Recalculates the object count and total estimated value for all scans.
+      This is useful for fixing data inconsistencies where scan totals don't match
+      the actual objects in the database.
+      
+      **Use Cases:**
+      - Data migration or cleanup
+      - Fixing inconsistencies after manual database changes
+      - Recovering from bugs in total calculation
+      
+      **Process:**
+      - Iterates through all scans in the system
+      - Counts actual objects for each scan
+      - Sums up estimated values
+      - Updates scan records with correct totals
+    `
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Totals recalculated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'All scan totals recalculated successfully' }
+      }
+    }
+  })
+  async recalculateAllTotals(): Promise<{ message: string }> {
+    await this.scansService.recalculateAllScanTotals();
+    return { message: 'All scan totals recalculated successfully' };
+  }
+
+  @Post(':id/recalculate-totals')
+  @ApiOperation({ 
+    summary: 'Recalculate totals for a specific scan',
+    description: `
+      **🔒 Admin Only**
+      
+      Recalculates the object count and total estimated value for a specific scan.
+    `
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Scan totals recalculated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Scan totals recalculated successfully' }
+      }
+    }
+  })
+  async recalculateScanTotals(@Param('id', ParseUUIDPipe) id: string): Promise<{ message: string }> {
+    await this.scansService.recalculateScanTotals(id);
+    return { message: 'Scan totals recalculated successfully' };
+  }
 }
 
 @ApiTags('Admin - Scans')

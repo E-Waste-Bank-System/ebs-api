@@ -240,6 +240,12 @@ export class ScansService {
       
       // Get the bucket
       const bucket = this.storage.bucket(this.bucketName);
+      // Check if bucket exists and is accessible
+      const [exists] = await bucket.exists();
+      if (!exists) {
+        this.logger.error(`Bucket ${this.bucketName} does not exist or is not accessible`);
+        throw new BadRequestException(`Storage bucket ${this.bucketName} does not exist or is not accessible`);
+      }
       const fileUpload = bucket.file(filename);
 
       // Create a write stream

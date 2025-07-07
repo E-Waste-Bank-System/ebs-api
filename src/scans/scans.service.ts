@@ -33,34 +33,39 @@ export class ScansService {
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
     
     try {
-      const credentialsJson = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
-      if (credentialsJson && credentialsJson.trim().startsWith('{')) {
-        this.logger.log('Using Google Cloud credentials from JSON content (Cloud Run/production)');
+      // Priority 1: Use GOOGLE_APPLICATION_CREDENTIALS (file path) - Standard Google Cloud approach
+      const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+      if (credentialsPath && fs.existsSync(credentialsPath)) {
+        this.logger.log(`Using Google Cloud credentials from file: ${credentialsPath}`);
+        this.storage = new Storage({ keyFilename: credentialsPath, projectId });
+      }
+      // Priority 2: Try to parse GOOGLE_CLOUD_KEY_FILE as JSON (fallback)
+      else if (this.configService.get('GOOGLE_CLOUD_KEY_FILE')) {
+        const credentialsJson = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
+        this.logger.log('Attempting to use Google Cloud credentials from JSON environment variable');
+        
         try {
-          const credentials = JSON.parse(credentialsJson);
+          // Clean the JSON string - remove any extra quotes or escaping
+          let cleanJson = credentialsJson.trim();
+          if (cleanJson.startsWith('"') && cleanJson.endsWith('"')) {
+            cleanJson = cleanJson.slice(1, -1);
+          }
+          
+          const credentials = JSON.parse(cleanJson);
           this.storage = new Storage({ credentials, projectId });
           this.logger.log('Google Cloud Storage initialized with JSON credentials');
         } catch (parseError) {
           this.logger.error('Failed to parse credentials JSON:', parseError.message);
+          this.logger.error('JSON content preview:', credentialsJson.substring(0, 100) + '...');
           throw new Error(`Invalid JSON credentials: ${parseError.message}`);
         }
-      } else if (credentialsJson) {
-        // Local dev: credentials as file path
-        const keyFilePath = path.isAbsolute(credentialsJson)
-          ? credentialsJson
-          : path.join(process.cwd(), credentialsJson);
-        this.logger.log('Using Google Cloud credentials from file');
-        this.logger.log(`Key file path: ${keyFilePath}`);
-        if (!fs.existsSync(keyFilePath)) {
-          this.logger.error(`Google Cloud key file not found at: ${keyFilePath}`);
-          throw new Error(`Google Cloud key file not found at: ${keyFilePath}`);
-        }
-        this.storage = new Storage({ keyFilename: keyFilePath, projectId });
-      } else {
-        // Fallback: Application Default Credentials
-        this.logger.log('Using Application Default Credentials');
+      }
+      // Priority 3: Application Default Credentials (recommended for Cloud Run)
+      else {
+        this.logger.log('Using Application Default Credentials (ADC)');
         this.storage = new Storage({ projectId });
       }
+      
       this.logger.log('Google Cloud Storage initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Google Cloud Storage:', error);

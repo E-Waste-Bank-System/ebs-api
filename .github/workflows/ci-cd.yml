@@ -127,7 +127,7 @@ jobs:
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
           # Set environment variables for the Cloud Run service
           env_vars: |
-            GOOGLE_APPLICATION_CREDENTIALS=${{ secrets.GCP_SA_KEY }}
+            GOOGLE_CLOUD_KEY_FILE=${{ secrets.GCP_SA_KEY }}
             NODE_ENV=production
             JWT_SECRET=c94xKfchSj64JJqI7cMKZbIs4n/6pB920TcQlzURwln+IV5SP+G1jIHg5u4hUVHqb9QanSU6hX+7FGr/iTQpiQ==
             SUPABASE_URL=https://dyhzmepwuzhfzbuemebb.supabase.co

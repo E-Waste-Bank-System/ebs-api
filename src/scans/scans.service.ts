@@ -46,20 +46,24 @@ export class ScansService {
         }
         this.storage = new Storage({ credentials, projectId });
       }
-      // 2. File path: Use GOOGLE_APPLICATION_CREDENTIALS if present and file exists
+      // 2. Local/dev: Use GOOGLE_APPLICATION_CREDENTIALS if present and file exists
       else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
         this.logger.log(`Using Google Cloud credentials from file: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
         this.storage = new Storage({ keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS, projectId });
       }
-      // 3. Cloud Run: Use ADC
+      // 3. Cloud Run or ADC: Use Application Default Credentials (no credentials or keyFilename specified)
       else {
         this.logger.log('Using Application Default Credentials (ADC)');
         this.storage = new Storage({ projectId });
       }
       this.logger.log('Google Cloud Storage initialized successfully');
     } catch (error) {
-      this.logger.error('Failed to initialize Google Cloud Storage:', error);
-      throw new Error('Google Cloud Storage initialization failed');
+      this.logger.error('Failed to initialize Google Cloud Storage:', {
+        error: error.message,
+        projectId,
+        bucketName: this.bucketName
+      });
+      throw new Error(`Google Cloud Storage initialization failed: ${error.message}`);
     }
   }
 

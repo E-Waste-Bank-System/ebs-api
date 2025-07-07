@@ -20,7 +20,7 @@ import { GetUser } from '../auth/decorators/get-user.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { PaginatedResponse } from '../common/dto/pagination.dto';
 
-@ApiTags('👨‍💼 Admin - Profiles')
+@ApiTags('👨‍💼 Admin')
 @Controller('profiles')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)

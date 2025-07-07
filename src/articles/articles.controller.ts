@@ -72,6 +72,23 @@ export class ArticlesController {
             pages: { type: 'number', example: 3 }
           }
         }
+      },
+      example: {
+        data: [
+          {
+            id: '123e4567-e89b-12d3-a456-426614174000',
+            title: 'The Ultimate Guide to E-Waste Recycling',
+            slug: 'ultimate-guide-e-waste-recycling',
+            excerpt: 'Learn about proper e-waste disposal and recycling methods.',
+            featured_image: 'https://example.com/image.jpg',
+            status: 'published',
+            tags: ['recycling', 'environment'],
+            view_count: 123,
+            created_at: '2024-01-15T10:30:00.000Z',
+            published_at: '2024-01-16T10:30:00.000Z'
+          }
+        ],
+        meta: { page: 1, limit: 10, total: 1, pages: 1 }
       }
     }
   })
@@ -110,12 +127,33 @@ export class ArticlesController {
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved article',
-    type: ArticleResponseDto
+    type: ArticleResponseDto,
+    example: {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      title: 'The Ultimate Guide to E-Waste Recycling',
+      slug: 'ultimate-guide-e-waste-recycling',
+      content: { blocks: [{ type: 'paragraph', data: { text: 'E-waste recycling is important...' } }] },
+      excerpt: 'Learn about proper e-waste disposal and recycling methods.',
+      featured_image: 'https://example.com/image.jpg',
+      status: 'published',
+      tags: ['recycling', 'environment'],
+      view_count: 123,
+      created_at: '2024-01-15T10:30:00.000Z',
+      updated_at: '2024-01-16T10:30:00.000Z',
+      published_at: '2024-01-16T10:30:00.000Z'
+    }
   })
   @ApiResponse({
     status: 404,
     description: 'Article not found',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: 'Article not found',
+      error: 'Not Found',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/articles/unknown-slug'
+    }
   })
   async findOneBySlug(@Param('slug') slug: string): Promise<ArticleResponseDto> {
     this.logger.logDebug(`Article requested by slug: ${slug}`);
@@ -138,7 +176,7 @@ export class ArticlesController {
   }
 }
 
-@ApiTags('👨‍💼 Admin - Articles')
+@ApiTags('👨‍💼 Admin')
 @Controller('admin/articles')
 export class AdminArticlesController {
   private readonly logger = AppLogger.getInstance('AdminArticlesController');
@@ -171,24 +209,66 @@ export class AdminArticlesController {
         meta: {
           type: 'object',
           properties: {
-            page: { type: 'number' },
-            limit: { type: 'number' },
-            total: { type: 'number' },
-            pages: { type: 'number' }
+            page: { type: 'number', example: 1 },
+            limit: { type: 'number', example: 20 },
+            total: { type: 'number', example: 2 },
+            pages: { type: 'number', example: 1 }
           }
         }
+      },
+      example: {
+        data: [
+          {
+            id: '123e4567-e89b-12d3-a456-426614174000',
+            title: 'Ultimate Guide to E-Waste Recycling',
+            slug: 'ultimate-guide-e-waste-recycling',
+            content: { blocks: [{ type: 'paragraph', data: { text: 'E-waste recycling is important...' } }] },
+            excerpt: 'Learn everything about e-waste recycling...',
+            featured_image: 'https://storage.googleapis.com/ebs-storage/articles/featured-image.jpg',
+            status: 'draft',
+            tags: ['recycling', 'e-waste'],
+            view_count: 0,
+            meta_title: 'SEO Title for E-Waste Guide',
+            meta_description: 'SEO description for the article',
+            is_featured: false,
+            created_at: '2024-01-15T10:30:00.000Z',
+            updated_at: '2024-01-15T10:30:00.000Z',
+            published_at: null,
+            author: {
+              id: 'admin-uuid',
+              email: 'admin@ebs.com',
+              full_name: 'Admin User',
+              avatar_url: 'https://example.com/avatar.jpg'
+            }
+          }
+        ],
+        meta: { page: 1, limit: 20, total: 1, pages: 1 }
       }
     }
   })
   @ApiResponse({
     status: 401,
     description: 'Unauthorized - JWT token required',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Unauthorized',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles'
+    }
   })
   @ApiResponse({
     status: 403,
     description: 'Forbidden - admin role required',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 403,
+      message: 'Insufficient permissions',
+      error: 'Forbidden',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles'
+    }
   })
   async findAll(@Query() query: ArticleQueryDto): Promise<PaginatedResponse<ArticleResponseDto>> {
     this.logger.logDebug(`Admin articles requested with query: ${JSON.stringify(query)}`);
@@ -229,13 +309,11 @@ export class AdminArticlesController {
     summary: 'Create new article',
     description: `
       Create a new article with optional featured image upload.
-      
-      **Content Format:**
+      \n      **Content Format:**
       - Supports EditorJS JSON format for rich content
       - Plain text content also supported
       - HTML content can be embedded
-      
-      **Image Upload:**
+      \n      **Image Upload:**
       - Featured image is optional
       - Supports JPG, PNG, WebP formats
       - Max file size: 5MB
@@ -249,7 +327,7 @@ export class AdminArticlesController {
       type: 'object',
       properties: {
         title: { type: 'string', example: 'Ultimate Guide to E-Waste Recycling' },
-        content: { type: 'string', description: 'Article content (EditorJS JSON or plain text)' },
+        content: { type: 'string', description: 'Article content (EditorJS JSON or plain text)', example: '{"blocks":[{"type":"paragraph","data":{"text":"E-waste recycling is important..."}}]}' },
         excerpt: { type: 'string', example: 'Learn everything about e-waste recycling...' },
         status: { enum: ['draft', 'published', 'archived'], example: 'draft' },
         tags: { type: 'array', items: { type: 'string' }, example: ['recycling', 'e-waste'] },
@@ -263,27 +341,86 @@ export class AdminArticlesController {
         }
       },
       required: ['title', 'content']
+    },
+    examples: {
+      json: {
+        summary: 'JSON content',
+        value: {
+          title: 'Ultimate Guide to E-Waste Recycling',
+          content: '{"blocks":[{"type":"paragraph","data":{"text":"E-waste recycling is important..."}}]}',
+          excerpt: 'Learn everything about e-waste recycling...',
+          status: 'draft',
+          tags: ['recycling', 'e-waste'],
+          meta_title: 'SEO Title for E-Waste Guide',
+          meta_description: 'SEO description for the article',
+          is_featured: false
+        }
+      }
     }
   })
-  @ApiResponse({
-    status: 201,
+  @ApiResponse({ 
+    status: 201, 
     description: 'Article created successfully',
-    type: ArticleResponseDto
+    type: ArticleResponseDto,
+    example: {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      title: 'Ultimate Guide to E-Waste Recycling',
+      slug: 'ultimate-guide-e-waste-recycling',
+      content: { blocks: [{ type: 'paragraph', data: { text: 'E-waste recycling is important...' } }] },
+      excerpt: 'Learn everything about e-waste recycling...',
+      featured_image: 'https://storage.googleapis.com/ebs-storage/articles/featured-image.jpg',
+      status: 'draft',
+      tags: ['recycling', 'e-waste'],
+      view_count: 0,
+      meta_title: 'SEO Title for E-Waste Guide',
+      meta_description: 'SEO description for the article',
+      is_featured: false,
+      created_at: '2024-01-15T10:30:00.000Z',
+      updated_at: '2024-01-15T10:30:00.000Z',
+      published_at: null,
+      author: {
+        id: 'admin-uuid',
+        email: 'admin@ebs.com',
+        full_name: 'Admin User',
+        avatar_url: 'https://example.com/avatar.jpg'
+      }
+    }
   })
-  @ApiResponse({
-    status: 400,
+  @ApiResponse({ 
+    status: 400, 
     description: 'Bad request - invalid data or missing required fields',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: 'Invalid article data',
+      error: 'Bad Request',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles'
+    }
   })
-  @ApiResponse({
-    status: 401,
+  @ApiResponse({ 
+    status: 401, 
     description: 'Unauthorized - JWT token required',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Unauthorized',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles'
+    }
   })
-  @ApiResponse({
-    status: 403,
+  @ApiResponse({ 
+    status: 403, 
     description: 'Forbidden - admin role required',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 403,
+      message: 'Insufficient permissions',
+      error: 'Forbidden',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles'
+    }
   })
   async create(
     @Body() createArticleDto: any, // Use any to handle both JSON and form data
@@ -359,12 +496,42 @@ export class AdminArticlesController {
   @ApiResponse({
     status: 200,
     description: 'Successfully retrieved article',
-    type: ArticleResponseDto
+    type: ArticleResponseDto,
+    example: {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      title: 'Ultimate Guide to E-Waste Recycling',
+      slug: 'ultimate-guide-e-waste-recycling',
+      content: { blocks: [{ type: 'paragraph', data: { text: 'E-waste recycling is important...' } }] },
+      excerpt: 'Learn everything about e-waste recycling...',
+      featured_image: 'https://storage.googleapis.com/ebs-storage/articles/featured-image.jpg',
+      status: 'draft',
+      tags: ['recycling', 'e-waste'],
+      view_count: 0,
+      meta_title: 'SEO Title for E-Waste Guide',
+      meta_description: 'SEO description for the article',
+      is_featured: false,
+      created_at: '2024-01-15T10:30:00.000Z',
+      updated_at: '2024-01-15T10:30:00.000Z',
+      published_at: null,
+      author: {
+        id: 'admin-uuid',
+        email: 'admin@ebs.com',
+        full_name: 'Admin User',
+        avatar_url: 'https://example.com/avatar.jpg'
+      }
+    }
   })
   @ApiResponse({
     status: 404,
     description: 'Article not found',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: 'Article not found',
+      error: 'Not Found',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles/unknown-id'
+    }
   })
   async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ArticleResponseDto> {
     this.logger.logDebug(`Admin article requested by ID: ${id}`);
@@ -410,12 +577,42 @@ export class AdminArticlesController {
   @ApiResponse({
     status: 200,
     description: 'Article updated successfully',
-    type: ArticleResponseDto
+    type: ArticleResponseDto,
+    example: {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      title: 'Updated Guide to E-Waste Recycling',
+      slug: 'updated-guide-e-waste-recycling',
+      content: { blocks: [{ type: 'paragraph', data: { text: 'Updated content...' } }] },
+      excerpt: 'Updated excerpt...',
+      featured_image: 'https://storage.googleapis.com/ebs-storage/articles/featured-image.jpg',
+      status: 'published',
+      tags: ['recycling', 'e-waste'],
+      view_count: 1,
+      meta_title: 'Updated SEO Title',
+      meta_description: 'Updated SEO description',
+      is_featured: true,
+      created_at: '2024-01-15T10:30:00.000Z',
+      updated_at: '2024-01-16T10:30:00.000Z',
+      published_at: '2024-01-16T10:30:00.000Z',
+      author: {
+        id: 'admin-uuid',
+        email: 'admin@ebs.com',
+        full_name: 'Admin User',
+        avatar_url: 'https://example.com/avatar.jpg'
+      }
+    }
   })
   @ApiResponse({
     status: 404,
     description: 'Article not found',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: 'Article not found',
+      error: 'Not Found',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles/unknown-id'
+    }
   })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -468,12 +665,20 @@ export class AdminArticlesController {
       properties: {
         message: { type: 'string', example: 'Article deleted successfully' }
       }
-    }
+    },
+    example: { message: 'Article deleted successfully' }
   })
   @ApiResponse({
     status: 404,
     description: 'Article not found',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: 'Article not found',
+      error: 'Not Found',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/admin/articles/unknown-id'
+    }
   })
   async remove(@Param('id', ParseUUIDPipe) id: string): Promise<{ message: string }> {
     this.logger.logDebug(`Article deletion requested for ID: ${id}`);

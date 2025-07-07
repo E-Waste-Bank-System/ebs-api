@@ -17,7 +17,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { ErrorResponseDto } from '../common/dto/response.dto';
 
-@ApiTags('📁 File Upload')
+@ApiTags('📁 Upload')
 @Controller('upload')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth('JWT-auth')
@@ -31,24 +31,20 @@ export class UploadController {
     summary: 'Upload file to cloud storage',
     description: `
       Upload files to Google Cloud Storage and receive a public URL.
-      
-      **Supported File Types:**
+      \n      **Supported File Types:**
       - **Images**: JPG, JPEG, PNG, GIF, WebP
       - **Documents**: PDF, TXT
-      
-      **Specifications:**
+      \n      **Specifications:**
       - Maximum file size: 10MB
       - Files are stored in Google Cloud Storage
       - Public URLs returned for immediate access
       - Automatic content type detection
-      
-      **Use Cases:**
+      \n      **Use Cases:**
       - Article featured images
       - User profile avatars  
       - Document attachments
       - General file storage needs
-      
-      **Storage Organization:**
+      \n      **Storage Organization:**
       Files can be organized using the optional \`path\` parameter to specify
       custom folders (e.g., 'articles/featured-images', 'profiles/avatars').
     `
@@ -73,6 +69,22 @@ export class UploadController {
         }
       },
       required: ['file']
+    },
+    examples: {
+      image: {
+        summary: 'Upload image',
+        value: {
+          file: 'featured-image.jpg',
+          path: 'articles/featured-images'
+        }
+      },
+      document: {
+        summary: 'Upload document',
+        value: {
+          file: 'document.pdf',
+          path: 'documents'
+        }
+      }
     }
   })
   @ApiResponse({
@@ -100,6 +112,7 @@ export class UploadController {
     example: {
       statusCode: 400,
       message: 'File is required',
+      error: 'Bad Request',
       timestamp: '2024-01-15T10:30:00.000Z',
       path: '/api/v1/upload'
     }
@@ -107,7 +120,14 @@ export class UploadController {
   @ApiResponse({
     status: 401,
     description: 'Unauthorized - authentication required',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Unauthorized',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/upload'
+    }
   })
   @ApiResponse({
     status: 413,
@@ -116,6 +136,7 @@ export class UploadController {
     example: {
       statusCode: 413,
       message: 'File too large',
+      error: 'Payload Too Large',
       timestamp: '2024-01-15T10:30:00.000Z',
       path: '/api/v1/upload'
     }
@@ -127,6 +148,7 @@ export class UploadController {
     example: {
       statusCode: 415,
       message: 'File type not allowed. Only images and PDFs are supported.',
+      error: 'Unsupported Media Type',
       timestamp: '2024-01-15T10:30:00.000Z',
       path: '/api/v1/upload'
     }

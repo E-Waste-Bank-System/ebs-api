@@ -97,6 +97,26 @@ async function bootstrap() {
       .setTitle('EBS API - E-Waste Detection System')
       .setDescription(`
 A comprehensive REST API for e-waste detection, management, and recycling education.
+
+## Overview
+This API provides endpoints for:
+- **E-Waste Detection**: AI-powered scanning and object detection
+- **Content Management**: Educational articles and resources
+- **User Management**: Authentication and profile management
+- **AI Training**: Model retraining and dataset management
+- **Administration**: System monitoring and analytics
+
+## Authentication
+Most endpoints require JWT authentication. Include the token in the Authorization header:
+\`\`\`
+Authorization: Bearer <your-jwt-token>
+\`\`\`
+
+## Rate Limiting
+API requests are rate-limited to ensure fair usage. Limits vary by endpoint and user role.
+
+## Error Handling
+All endpoints return consistent error responses with appropriate HTTP status codes.
 `)
       .setVersion('2.0.0')
       .setContact(
@@ -121,15 +141,11 @@ A comprehensive REST API for e-waste detection, management, and recycling educat
       .addTag('🏥 Health', 'System health monitoring and status checks')
       .addTag('🔐 Authentication', 'User authentication, login, and token management')
       .addTag('📚 Articles', 'Public articles and educational content (no auth required)')
-      .addTag('📱 E-Waste Scans', 'Image upload and AI-powered e-waste detection')
-      .addTag('🔍 E-Waste Objects', 'Detected object details and management')
-      .addTag('📁 File Upload', 'File storage and asset management via Google Cloud Storage')
-      .addTag('👨‍💼 Admin - Articles', 'Content management and article administration (admin only)')
-      .addTag('👨‍💼 Admin - Dashboard', 'System analytics and administrative overview (admin only)')
-      .addTag('👨‍💼 Admin - Objects', 'Object validation and correction tools (admin only)')
-      .addTag('👨‍💼 Admin - Profiles', 'User management and role assignment (admin only)')
-      .addTag('👨‍💼 Admin - Scans', 'System-wide scan monitoring and management (admin only)')
-      .addTag('👨‍💼 Admin - Retraining & Datasets', 'AI model training and dataset management (admin only)')
+      .addTag('📸 Scans', 'Image upload and AI-powered e-waste detection')
+      .addTag('🔍 Objects', 'Detected object details and management')
+      .addTag('📁 Upload', 'File storage and asset management')
+      .addTag('🤖 AI Training', 'AI model training and dataset management')
+      .addTag('👨‍💼 Admin', 'Administrative functions and system management')
       .build();
     
     const document = SwaggerModule.createDocument(app, config);

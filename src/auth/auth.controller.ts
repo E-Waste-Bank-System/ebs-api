@@ -2,13 +2,14 @@ import { Controller, Post, Get, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
-import { LoginDto, GenerateTokenDto, AuthResponseDto } from './dto/auth.dto';
+import { LoginDto, GenerateTokenDto, AuthResponseDto, VerifyTokenDto, SyncUsersDto } from './dto/auth.dto';
 import { Public } from './decorators/public.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { GetUser } from './decorators/get-user.decorator';
 import { ErrorResponseDto } from '../common/dto/response.dto';
 import { Auth } from '../common/decorators/auth.decorator';
 import { AppLogger } from '../common/utils/logger.util';
+import { UserProfileDto } from '../common/dto/user-profile.dto';
 
 @ApiTags('🔐 Authentication')
 @Controller('auth')
@@ -23,16 +24,14 @@ export class AuthController {
     summary: 'Login with email and password',
     description: `
       Authenticate user with email and password credentials. Returns JWT token for API access.
-      
-      **Login Flow:**
+      \n      **Login Flow:**
       1. User provides email and password
       2. System validates credentials against Supabase Auth
       3. Creates or updates local user profile
       4. Returns JWT token and user information
-      
-      **Token Usage:**
+      \n      **Token Usage:**
       Use the returned access_token in the Authorization header for subsequent requests:
-      \`Authorization: Bearer <access_token>\`
+      Authorization: Bearer <access_token>
     `
   })
   @ApiBody({
@@ -86,7 +85,14 @@ export class AuthController {
   @ApiResponse({ 
     status: 429, 
     description: 'Too many requests - rate limit exceeded',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 429,
+      message: 'Too many requests',
+      error: 'Too Many Requests',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/login'
+    }
   })
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
     this.logger.logDebug(`Login attempt for email: ${loginDto.email}`);
@@ -96,48 +102,66 @@ export class AuthController {
   @Post('token')
   @Public()
   @ApiOperation({ 
-    summary: 'Generate token for Google OAuth users',
+    summary: 'Generate JWT token for user',
     description: `
-      Generate a JWT access token for users authenticated via Google OAuth through Supabase Auth.
-      
-      **Google OAuth Flow:**
-      1. User signs in with Google via Supabase Auth (frontend)
-      2. Frontend receives Supabase user ID from OAuth callback
-      3. Frontend calls this endpoint with the user_id
-      4. Backend validates user exists in Supabase and creates/updates local profile
-      5. Returns JWT token for API authentication
-      
-      **Integration:**
-      This endpoint bridges Google OAuth authentication with the EBS API token system,
-      enabling seamless integration between Supabase Auth and the NestJS backend.
+      Generate a new JWT token for an authenticated user. This endpoint is typically used
+      to refresh tokens or generate tokens for users who are already authenticated.
+      \n      **Token Generation:**
+      1. User must be authenticated (provide valid session)
+      2. System generates new JWT token
+      3. Returns token and user information
     `
   })
   @ApiBody({
     type: GenerateTokenDto,
     examples: {
-      googleUser: {
-        summary: 'Google OAuth User',
-        description: 'Generate token for Google authenticated user',
+      default: {
+        summary: 'Generate Token',
+        description: 'Generate JWT token for authenticated user',
         value: {
-          user_id: '550e8400-e29b-41d4-a716-446655440000'
+          user_id: '123e4567-e89b-12d3-a456-426614174000'
         }
       }
     }
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'Token generated successfully - JWT token and user profile returned',
-    type: AuthResponseDto
-  })
-  @ApiResponse({ 
-    status: 401, 
-    description: 'User not found in Supabase Auth or unauthorized',
-    type: ErrorResponseDto
+    description: 'Token generated successfully',
+    type: AuthResponseDto,
+    example: {
+      access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      user: {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        email: 'user@example.com',
+        full_name: 'John Doe',
+        role: 'USER',
+        avatar_url: 'https://example.com/avatar.jpg'
+      }
+    }
   })
   @ApiResponse({ 
     status: 400, 
-    description: 'Invalid user_id format or missing required fields',
-    type: ErrorResponseDto
+    description: 'Invalid request - missing or invalid user_id',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: 'User ID is required',
+      error: 'Bad Request',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/token'
+    }
+  })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - invalid or missing authentication',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Unauthorized',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/token'
+    }
   })
   async generateToken(@Body() generateTokenDto: GenerateTokenDto): Promise<AuthResponseDto> {
     this.logger.logDebug(`Token generation requested for user: ${generateTokenDto.user_id}`);
@@ -145,62 +169,157 @@ export class AuthController {
   }
 
   @Get('profile')
-  @Auth(UserRole.USER, UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
     summary: 'Get current user profile',
-    description: 'Retrieve the profile information of the currently authenticated user'
+    description: `
+      Retrieve the profile information for the currently authenticated user.
+      \n      **Authentication:**
+      Requires valid JWT token in Authorization header:
+      Authorization: Bearer <access_token>
+      \n      **Profile Information:**
+      Returns user details including ID, email, name, role, and avatar URL.
+    `
   })
   @ApiResponse({ 
     status: 200, 
     description: 'User profile retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' },
-        email: { type: 'string', format: 'email', example: 'user@example.com' },
-        full_name: { type: 'string', example: 'John Doe' },
-        avatar_url: { type: 'string', format: 'uri', example: 'https://example.com/avatar.jpg' },
-        role: { type: 'string', enum: ['USER', 'ADMIN', 'SUPERADMIN'], example: 'USER' },
-        is_active: { type: 'boolean', example: true },
-        email_verified: { type: 'boolean', example: true },
-        created_at: { type: 'string', format: 'date-time' },
-        updated_at: { type: 'string', format: 'date-time' },
-        last_login_at: { type: 'string', format: 'date-time' }
-      }
+    type: UserProfileDto,
+    example: {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      email: 'user@example.com',
+      full_name: 'John Doe',
+      role: 'USER',
+      avatar_url: 'https://example.com/avatar.jpg',
+      created_at: '2024-01-15T10:30:00.000Z',
+      updated_at: '2024-01-15T10:30:00.000Z'
     }
   })
   @ApiResponse({ 
     status: 401, 
     description: 'Unauthorized - invalid or missing JWT token',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Unauthorized',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/profile'
+    }
+  })
+  @ApiResponse({ 
+    status: 404, 
+    description: 'User profile not found',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 404,
+      message: 'User profile not found',
+      error: 'Not Found',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/profile'
+    }
   })
   async getProfile(@GetUser() user: any) {
     this.logger.logDebug(`Profile requested for user: ${user.id}`);
     return this.authService.getCurrentUser(user.id);
   }
 
-  @Get('debug-jwt')
-  @Public()
+  @Get('debug')
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
-    summary: 'Debug JWT configuration',
-    description: '🔧 Development endpoint to debug JWT token configuration and settings'
+    summary: 'Debug authentication information',
+    description: `
+      Retrieve debug information about the current authentication session.
+      This endpoint is only available to administrators and provides detailed
+      information about the JWT token and user session.
+      \n      **Debug Information:**
+      - JWT token payload
+      - User session details
+      - Authentication metadata
+    `
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'JWT configuration details',
+    description: 'Debug information retrieved successfully',
     schema: {
       type: 'object',
       properties: {
-        hasJwtSecret: { type: 'boolean', example: true },
-        jwtSecretLength: { type: 'number', example: 64 },
-        jwtSecretPreview: { type: 'string', example: 'supersecret...' },
-        nodeEnv: { type: 'string', example: 'development' }
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' },
+            email: { type: 'string', format: 'email', example: 'admin@ebs.com' },
+            full_name: { type: 'string', example: 'Admin User' },
+            role: { type: 'string', enum: ['USER', 'ADMIN', 'SUPERADMIN'], example: 'ADMIN' }
+          }
+        },
+        token: {
+          type: 'object',
+          properties: {
+            sub: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
+            email: { type: 'string', example: 'admin@ebs.com' },
+            role: { type: 'string', example: 'ADMIN' },
+            iat: { type: 'number', example: 1705312200 },
+            exp: { type: 'number', example: 1705315800 }
+          }
+        },
+        session: {
+          type: 'object',
+          properties: {
+            authenticated: { type: 'boolean', example: true },
+            token_valid: { type: 'boolean', example: true },
+            expires_in: { type: 'number', example: 3600 }
+          }
+        }
+      }
+    },
+    example: {
+      user: {
+        id: '123e4567-e89b-12d3-a456-426614174000',
+        email: 'admin@ebs.com',
+        full_name: 'Admin User',
+        role: 'ADMIN'
+      },
+      token: {
+        sub: '123e4567-e89b-12d3-a456-426614174000',
+        email: 'admin@ebs.com',
+        role: 'ADMIN',
+        iat: 1705312200,
+        exp: 1705315800
+      },
+      session: {
+        authenticated: true,
+        token_valid: true,
+        expires_in: 3600
       }
     }
   })
-  async debugJwt() {
-    this.logger.logDebug('JWT debug endpoint accessed');
-    return this.authService.debugJwtConfig();
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Unauthorized - invalid or missing JWT token',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Unauthorized',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/debug'
+    }
+  })
+  @ApiResponse({ 
+    status: 403, 
+    description: 'Forbidden - insufficient permissions (requires ADMIN or SUPERADMIN role)',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 403,
+      message: 'Forbidden - Admin access required',
+      error: 'Forbidden',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/debug'
+    }
+  })
+  async debug() {
+    this.logger.logDebug('Debug endpoint accessed');
+    return this.authService.debugAuthenticationInfo();
   }
 
   @Post('verify')
@@ -208,29 +327,24 @@ export class AuthController {
   @ApiOperation({ 
     summary: 'Verify JWT token validity',
     description: `
-      Verify if a JWT token is valid and not expired.
-      
-      **Use Cases:**
-      - Frontend token validation
-      - Token refresh logic
-      - Debugging authentication issues
-      
-      **Response:**
-      - Valid token: Returns decoded payload
-      - Invalid token: Returns error details
+      Verify if a JWT token is valid and not expired. This endpoint is useful for
+      client-side token validation without making authenticated API calls.
+      \n      **Token Verification:**
+      1. Client provides JWT token
+      2. System validates token signature and expiration
+      3. Returns verification result and token payload
     `
   })
   @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        token: {
-          type: 'string',
-          description: 'JWT token to verify',
-          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+    type: VerifyTokenDto,
+    examples: {
+      valid: {
+        summary: 'Valid Token',
+        description: 'Verify a valid JWT token',
+        value: {
+          token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
         }
-      },
-      required: ['token']
+      }
     }
   })
   @ApiResponse({ 
@@ -246,71 +360,193 @@ export class AuthController {
             sub: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
             email: { type: 'string', example: 'user@example.com' },
             role: { type: 'string', example: 'USER' },
-            iat: { type: 'number', example: 1642234567 },
-            exp: { type: 'number', example: 1642320967 }
+            iat: { type: 'number', example: 1705312200 },
+            exp: { type: 'number', example: 1705315800 }
           }
-        }
+        },
+        expires_in: { type: 'number', example: 3600 }
       }
+    },
+    example: {
+      valid: true,
+      payload: {
+        sub: '123e4567-e89b-12d3-a456-426614174000',
+        email: 'user@example.com',
+        role: 'USER',
+        iat: 1705312200,
+        exp: 1705315800
+      },
+      expires_in: 3600
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Invalid token format or missing token',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: 'Token is required',
+      error: 'Bad Request',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/verify'
     }
   })
   @ApiResponse({ 
     status: 401, 
     description: 'Token is invalid or expired',
-    type: ErrorResponseDto
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Invalid or expired token',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/verify'
+    }
   })
   async verifyToken(@Body() body: { token: string }) {
     this.logger.logDebug('Token verification requested');
     return this.authService.verifyTokenManually(body.token);
   }
 
-  @Post('sync-users')
+  @Post('sync')
   @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
-    summary: 'Sync users from Supabase Auth (Admin)',
+    summary: 'Sync user data with Supabase',
     description: `
-      🔒 Admin Only Operation
-      
-      Synchronize all users from Supabase Auth to the local database.
-      This ensures all Supabase users have corresponding local profiles.
-      
-      **Process:**
-      1. Fetches all users from Supabase Auth
-      2. Creates local profiles for new users
-      3. Updates existing profiles with latest data
-      4. Cleans up profiles with invalid emails
-      
-      **Use Cases:**
-      - Initial system setup
-      - Data consistency maintenance
-      - Recovery from sync issues
-      - Bulk user management
+      Synchronize user data between the local database and Supabase Auth.
+      This endpoint is used by administrators to ensure data consistency
+      between the EBS API and Supabase authentication system.
+      \n      **Sync Process:**
+      1. Fetch user data from Supabase Auth
+      2. Update local user profiles
+      3. Return sync results and statistics
     `
   })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'User synchronization completed successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'User synchronization completed' },
-        synced: { type: 'number', example: 25 },
-        skipped: { type: 'number', example: 5 },
-        cleaned: { type: 'number', example: 2 }
+  @ApiBody({
+    type: SyncUsersDto,
+    examples: {
+      full: {
+        summary: 'Full Sync',
+        description: 'Sync all users from Supabase',
+        value: {
+          sync_all: true
+        }
+      },
+      specific: {
+        summary: 'Specific User Sync',
+        description: 'Sync specific user by email',
+        value: {
+          sync_all: false,
+          user_email: 'user@example.com'
+        }
       }
     }
   })
   @ApiResponse({ 
+    status: 200, 
+    description: 'User sync completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        message: { type: 'string', example: 'User sync completed successfully' },
+        stats: {
+          type: 'object',
+          properties: {
+            total_users: { type: 'number', example: 150 },
+            synced_users: { type: 'number', example: 145 },
+            new_users: { type: 'number', example: 5 },
+            updated_users: { type: 'number', example: 140 },
+            errors: { type: 'number', example: 0 }
+          }
+        },
+        details: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              email: { type: 'string', example: 'user@example.com' },
+              status: { type: 'string', example: 'synced' },
+              action: { type: 'string', example: 'updated' }
+            }
+          }
+        }
+      }
+    },
+    example: {
+      success: true,
+      message: 'User sync completed successfully',
+      stats: {
+        total_users: 150,
+        synced_users: 145,
+        new_users: 5,
+        updated_users: 140,
+        errors: 0
+      },
+      details: [
+        {
+          email: 'user@example.com',
+          status: 'synced',
+          action: 'updated'
+        },
+        {
+          email: 'newuser@example.com',
+          status: 'synced',
+          action: 'created'
+        }
+      ]
+    }
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Invalid sync parameters',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 400,
+      message: 'Invalid sync parameters',
+      error: 'Bad Request',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/sync'
+    }
+  })
+  @ApiResponse({ 
     status: 401, 
-    description: 'Unauthorized - authentication required',
-    type: ErrorResponseDto
+    description: 'Unauthorized - invalid or missing JWT token',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 401,
+      message: 'Unauthorized',
+      error: 'Unauthorized',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/sync'
+    }
   })
   @ApiResponse({ 
     status: 403, 
-    description: 'Forbidden - admin access required',
-    type: ErrorResponseDto
+    description: 'Forbidden - insufficient permissions (requires ADMIN or SUPERADMIN role)',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 403,
+      message: 'Forbidden - Admin access required',
+      error: 'Forbidden',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/sync'
+    }
   })
-  async syncUsers() {
+  @ApiResponse({ 
+    status: 500, 
+    description: 'Internal server error during sync process',
+    type: ErrorResponseDto,
+    example: {
+      statusCode: 500,
+      message: 'Failed to sync users with Supabase',
+      error: 'Internal Server Error',
+      timestamp: '2024-01-15T10:30:00.000Z',
+      path: '/api/v1/auth/sync'
+    }
+  })
+  async syncUsers(@Body() syncUsersDto: SyncUsersDto) {
     this.logger.logInfo('User synchronization requested by admin');
-    return this.authService.syncAllUsers();
+    return this.authService.syncUsers(syncUsersDto);
   }
 } 

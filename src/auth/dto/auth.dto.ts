@@ -68,4 +68,32 @@ export class CurrentUserDto {
 
   @ApiProperty()
   last_login_at?: Date;
+}
+
+export class VerifyTokenDto {
+  @ApiProperty({
+    description: 'JWT token to verify',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+  })
+  @IsString()
+  @IsNotEmpty()
+  token: string;
+}
+
+export class SyncUsersDto {
+  @ApiProperty({
+    description: 'Whether to sync all users or specific user',
+    example: true
+  })
+  @IsOptional()
+  sync_all?: boolean;
+
+  @ApiProperty({
+    description: 'Specific user email to sync (when sync_all is false)',
+    example: 'user@example.com',
+    required: false
+  })
+  @IsOptional()
+  @IsEmail()
+  user_email?: string;
 } 

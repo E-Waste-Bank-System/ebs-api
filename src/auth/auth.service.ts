@@ -8,6 +8,7 @@ import { SupabaseService } from '../supabase/supabase.service';
 import { Profile } from '../profiles/entities/profile.entity';
 import { UserRole } from '../common/enums/role.enum';
 import { LoginDto, AuthResponseDto } from './dto/auth.dto';
+import { User } from '@supabase/supabase-js';
 
 @Injectable()
 export class AuthService {
@@ -395,6 +396,98 @@ export class AuthService {
         throw error;
       }
       throw new UnauthorizedException('Token generation failed');
+    }
+  }
+
+  async debugAuthenticationInfo() {
+    const jwtSecret = this.configService.get('JWT_SECRET');
+    const nodeEnv = this.configService.get('NODE_ENV');
+    
+    return {
+      jwt: {
+        hasSecret: !!jwtSecret,
+        secretLength: jwtSecret ? jwtSecret.length : 0,
+        secretPreview: jwtSecret ? jwtSecret.substring(0, 10) + '...' : 'Not set',
+        expiresIn: this.configService.get('JWT_EXPIRES_IN') || '24h',
+      },
+      environment: {
+        nodeEnv,
+        isProduction: nodeEnv === 'production',
+        isDevelopment: nodeEnv === 'development',
+      },
+      supabase: {
+        url: this.configService.get('SUPABASE_URL') ? 'Set' : 'Not set',
+        anonKey: this.configService.get('SUPABASE_ANON_KEY') ? 'Set' : 'Not set',
+        serviceKey: this.configService.get('SUPABASE_SERVICE_ROLE_KEY') ? 'Set' : 'Not set',
+      }
+    };
+  }
+
+  async syncUsers(syncUsersDto: { sync_all?: boolean; user_email?: string }) {
+    try {
+      if (syncUsersDto.sync_all) {
+        // Sync all users
+        return await this.syncAllUsers();
+      } else if (syncUsersDto.user_email) {
+        // Sync specific user by email
+        const { data: { users }, error } = await this.supabaseService
+          .getClient()
+          .auth.admin.listUsers();
+
+        if (error) {
+          throw new Error('Failed to fetch users from Supabase Auth');
+        }
+
+        const targetUser = users.find((user: User) => user.email === syncUsersDto.user_email);
+        
+        if (!targetUser) {
+          throw new Error(`User with email ${syncUsersDto.user_email} not found in Supabase Auth`);
+        }
+
+        // Check if profile already exists
+        let profile = await this.profileRepository.findOne({
+          where: { email: targetUser.email },
+        });
+
+        if (!profile) {
+          // Create new profile
+          profile = this.profileRepository.create({
+            email: targetUser.email,
+            full_name: targetUser.user_metadata?.full_name || 
+                      targetUser.user_metadata?.name || 
+                      targetUser.email.split('@')[0],
+            avatar_url: targetUser.user_metadata?.avatar_url,
+            role: UserRole.USER,
+            is_active: true,
+            email_verified: targetUser.email_confirmed_at ? true : false,
+          });
+
+          const savedProfile = await this.profileRepository.save(profile);
+          
+          // Update with Supabase user ID
+          savedProfile.id = targetUser.id;
+          await this.profileRepository.save(savedProfile);
+
+          return {
+            message: 'User synced successfully',
+            synced: 1,
+            skipped: 0,
+            total: 1,
+          };
+        } else {
+          return {
+            message: 'User already exists in local database',
+            synced: 0,
+            skipped: 1,
+            total: 1,
+          };
+        }
+      } else {
+        throw new Error('Either sync_all must be true or user_email must be provided');
+      }
+    } catch (error) {
+      console.error('Error syncing users:', error);
+      throw new Error(`Failed to sync users: ${error.message}`);
     }
   }
 } 

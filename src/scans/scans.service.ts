@@ -34,7 +34,7 @@ export class ScansService {
     
     try {
       // In Cloud Run, use default credentials instead of key file
-      const keyFilename = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
+      const keyFilename = this.configService.get('         GOOGLE_APPLICATION_CREDENTIALS');
       const keyFilePath = keyFilename ? path.join(process.cwd(), keyFilename) : null;
       
       // Check if we're in Cloud Run (no key file) or local development (with key file)

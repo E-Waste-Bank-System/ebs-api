@@ -73,7 +73,7 @@ SUPABASE_SERVICE_KEY=your-service-key
 
 # Google Cloud Storage
 GOOGLE_CLOUD_PROJECT_ID=your-project-id
-GOOGLE_CLOUD_KEY_FILE=path/to/service-account.json
+         GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
 GOOGLE_CLOUD_STORAGE_BUCKET=your-bucket-name
 
 # AI Service

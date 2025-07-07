@@ -33,39 +33,29 @@ export class ScansService {
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
     
     try {
-      // Priority 1: Use GOOGLE_APPLICATION_CREDENTIALS (file path) - Standard Google Cloud approach
-      const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-      if (credentialsPath && fs.existsSync(credentialsPath)) {
-        this.logger.log(`Using Google Cloud credentials from file: ${credentialsPath}`);
-        this.storage = new Storage({ keyFilename: credentialsPath, projectId });
-      }
-      // Priority 2: Try to parse GOOGLE_APPLICATION_CREDENTIALS as JSON (fallback)
-      else if (this.configService.get('GOOGLE_APPLICATION_CREDENTIALS')) {
-        const credentialsJson = this.configService.get('GOOGLE_APPLICATION_CREDENTIALS');
-        this.logger.log('Attempting to use Google Cloud credentials from JSON environment variable');
-        
+      // 1. Local dev: Use GCP_SERVICE_ACCOUNT_JSON if present
+      const serviceAccountJson = this.configService.get('GCP_SERVICE_ACCOUNT_JSON');
+      if (serviceAccountJson) {
+        this.logger.log('Using Google Cloud credentials from GCP_SERVICE_ACCOUNT_JSON');
+        let credentials;
         try {
-          // Clean the JSON string - remove any extra quotes or escaping
-          let cleanJson = credentialsJson.trim();
-          if (cleanJson.startsWith('"') && cleanJson.endsWith('"')) {
-            cleanJson = cleanJson.slice(1, -1);
-          }
-          
-          const credentials = JSON.parse(cleanJson);
-          this.storage = new Storage({ credentials, projectId });
-          this.logger.log('Google Cloud Storage initialized with JSON credentials');
-        } catch (parseError) {
-          this.logger.error('Failed to parse credentials JSON:', parseError.message);
-          this.logger.error('JSON content preview:', credentialsJson.substring(0, 100) + '...');
-          throw new Error(`Invalid JSON credentials: ${parseError.message}`);
+          credentials = JSON.parse(serviceAccountJson);
+        } catch (err) {
+          this.logger.error('Failed to parse GCP_SERVICE_ACCOUNT_JSON:', err.message);
+          throw new Error('Invalid GCP_SERVICE_ACCOUNT_JSON');
         }
+        this.storage = new Storage({ credentials, projectId });
       }
-      // Priority 3: Application Default Credentials (recommended for Cloud Run)
+      // 2. File path: Use GOOGLE_APPLICATION_CREDENTIALS if present and file exists
+      else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+        this.logger.log(`Using Google Cloud credentials from file: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
+        this.storage = new Storage({ keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS, projectId });
+      }
+      // 3. Cloud Run: Use ADC
       else {
         this.logger.log('Using Application Default Credentials (ADC)');
         this.storage = new Storage({ projectId });
       }
-      
       this.logger.log('Google Cloud Storage initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Google Cloud Storage:', error);

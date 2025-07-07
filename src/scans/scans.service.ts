@@ -33,24 +33,34 @@ export class ScansService {
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
     
     try {
-      // In Cloud Run, use default credentials instead of key file
-      const keyFilename = this.configService.get('         GOOGLE_APPLICATION_CREDENTIALS');
-      const keyFilePath = keyFilename ? path.join(process.cwd(), keyFilename) : null;
-      
-      // Check if we're in Cloud Run (no key file) or local development (with key file)
-      if (keyFilePath && fs.existsSync(keyFilePath)) {
-        this.logger.log('Using service account key file for authentication');
-        this.storage = new Storage({
-          keyFilename: keyFilePath,
-          projectId,
-        });
+      const credentialsJson = this.configService.get('GOOGLE_APPLICATION_CREDENTIALS');
+      if (credentialsJson && credentialsJson.trim().startsWith('{')) {
+        this.logger.log('Using Google Cloud credentials from JSON content (Cloud Run/production)');
+        try {
+          const credentials = JSON.parse(credentialsJson);
+          this.storage = new Storage({ credentials, projectId });
+          this.logger.log('Google Cloud Storage initialized with JSON credentials');
+        } catch (parseError) {
+          this.logger.error('Failed to parse credentials JSON:', parseError.message);
+          throw new Error(`Invalid JSON credentials: ${parseError.message}`);
+        }
+      } else if (credentialsJson) {
+        // Local dev: credentials as file path
+        const keyFilePath = path.isAbsolute(credentialsJson)
+          ? credentialsJson
+          : path.join(process.cwd(), credentialsJson);
+        this.logger.log('Using Google Cloud credentials from file');
+        this.logger.log(`Key file path: ${keyFilePath}`);
+        if (!fs.existsSync(keyFilePath)) {
+          this.logger.error(`Google Cloud key file not found at: ${keyFilePath}`);
+          throw new Error(`Google Cloud key file not found at: ${keyFilePath}`);
+        }
+        this.storage = new Storage({ keyFilename: keyFilePath, projectId });
       } else {
-        this.logger.log('Using default credentials (Cloud Run environment)');
-        this.storage = new Storage({
-          projectId,
-        });
+        // Fallback: Application Default Credentials
+        this.logger.log('Using Application Default Credentials');
+        this.storage = new Storage({ projectId });
       }
-      
       this.logger.log('Google Cloud Storage initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Google Cloud Storage:', error);

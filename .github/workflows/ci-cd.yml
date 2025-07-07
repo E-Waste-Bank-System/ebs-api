@@ -138,7 +138,7 @@ jobs:
             GOOGLE_CLIENT_ID=981332637673-otgo810evdbis5hd6oa6pkiq4ha6dq3e.apps.googleusercontent.com
             AI_URL=https://ebs-ai-981332637673.asia-southeast2.run.app/predict
             CLIENT_ORIGIN=http://localhost:3000
-            GOOGLE_CLOUD_KEY_FILE=${{ secrets.GCP_SA_KEY }}
+            GOOGLE_APPLICATION_CREDENTIALS=${{ secrets.GCP_SA_KEY }}
 
       # If required, use the Cloud Run url output in later steps
       - name: Show Output

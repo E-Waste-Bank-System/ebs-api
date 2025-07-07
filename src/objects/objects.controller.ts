@@ -7,6 +7,7 @@ import {
   Body, 
   Query,
   ParseUUIDPipe,
+  Delete,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 
@@ -434,5 +435,20 @@ export class AdminObjectsController {
   ) {
     this.logger.logDebug(`Object rejection requested for ID: ${id} by user: ${userId}`);
     return await this.objectsService.reject(id, userId, body.notes);
+  }
+
+  @Delete(':id')
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @ApiOperation({ summary: 'Delete object (Admin)', description: 'Permanently delete an e-waste object by ID.' })
+  @ApiParam({ name: 'id', description: 'Object UUID', example: '123e4567-e89b-12d3-a456-426614174000' })
+  @ApiResponse({ status: 200, description: 'Object deleted successfully', schema: { type: 'object', properties: { message: { type: 'string' }, deletedObjectId: { type: 'string', format: 'uuid' } } } })
+  @ApiResponse({ status: 404, description: 'Object not found', type: ErrorResponseDto })
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser('id') userId: string,
+  ) {
+    this.logger.logDebug(`Object delete requested for ID: ${id} by user: ${userId}`);
+    await this.objectsService.delete(id, userId);
+    return { message: 'Object deleted successfully', deletedObjectId: id };
   }
 } 

@@ -96,70 +96,8 @@ async function bootstrap() {
     const config = new DocumentBuilder()
       .setTitle('EBS API - E-Waste Detection System')
       .setDescription(`
-# 🌟 EBS API Documentation
-
 A comprehensive REST API for e-waste detection, management, and recycling education.
-
-## 🔗 Live API
-- **Production API:** https://ebs-api-981332637673.asia-southeast2.run.app
-- **Frontend App:** https://ewastehub.netlify.app
-
-## 🔐 Authentication
-All authenticated endpoints require a Bearer token in the Authorization header:
-\`Authorization: Bearer <your-jwt-token>\`
-
-## 📋 API Endpoints Organization
-
-### 🏥 System Health
-- Health monitoring and status checks
-
-### 🔐 Authentication  
-- User login, registration, and token management
-- Google OAuth integration support
-
-### 📚 Articles (Public)
-- Public access to published educational content
-- Search and filter capabilities
-
-### 📱 E-Waste Scans (User)
-- Image upload for AI-powered e-waste detection
-- Scan history and results management
-
-### 🔍 E-Waste Objects (User)
-- View detected objects and details
-- Object categorization and value estimates
-
-### 📁 File Upload
-- General file storage with Google Cloud Storage
-- Dedicated article image upload endpoint
-
-### 👨‍💼 Admin Endpoints
-Administrative functions requiring ADMIN or SUPERADMIN roles:
-
-- **Articles:** Content creation, editing, and management
-- **Dashboard:** System analytics and overview statistics  
-- **Objects:** Object validation, correction, and manual entry
-- **Profiles:** User management and role assignment
-- **Scans:** System-wide scan monitoring and management
-- **Retraining & Datasets:** AI model training and dataset management
-
-## 🚀 Getting Started
-
-1. **Authentication:** Use \`POST /auth/login\` or \`POST /auth/token\` for Google OAuth
-2. **Upload Image:** Use \`POST /scans\` to scan e-waste images
-3. **View Results:** Use \`GET /scans/:id\` to see detected objects
-4. **Browse Content:** Use \`GET /articles\` for educational articles
-
-## 🔧 Recent Updates
-- ✅ Fixed duplicate Swagger tags organization
-- ✅ Added unique slug generation for articles  
-- ✅ Enhanced article status validation
-- ✅ Added dedicated article image upload endpoint
-- ✅ Improved error handling and validation messages
-
-## 📊 Response Formats
-All responses follow consistent JSON structures with proper HTTP status codes and detailed error messages for debugging.
-      `)
+`)
       .setVersion('2.0.0')
       .setContact(
         'EBS Development Team',

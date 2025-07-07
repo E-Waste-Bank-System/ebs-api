@@ -19,69 +19,35 @@ export class UploadService {
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
     
     try {
-      // Check if we have credentials as JSON content (Cloud Run environment)
       const credentialsJson = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
-      
-      if (credentialsJson && credentialsJson.startsWith('{')) {
-        // Credentials are provided as JSON content - parse and use directly
-        this.logger.log('Using Google Cloud credentials from JSON content (Cloud Run mode)');
+      if (credentialsJson && credentialsJson.trim().startsWith('{')) {
+        // Cloud Run/production: credentials as JSON string in env var
+        this.logger.log('Using Google Cloud credentials from JSON content (Cloud Run/production)');
         try {
           const credentials = JSON.parse(credentialsJson);
-          this.storage = new Storage({
-            credentials,
-            projectId,
-          });
+          this.storage = new Storage({ credentials, projectId });
           this.logger.log('Google Cloud Storage initialized with JSON credentials');
         } catch (parseError) {
           this.logger.error('Failed to parse credentials JSON:', parseError.message);
           throw new Error(`Invalid JSON credentials: ${parseError.message}`);
         }
-              } else {
-          // Try to use key file path (local development or Cloud Run with file)
-          const keyFilename = credentialsJson || 'ebs-cloud-service-account.json' || 'ebs-cloud-456404-472153b611d9.json';
-          const cleanKeyFilename = keyFilename.replace(/[{}]/g, '');
-          const keyFilePath = path.join(process.cwd(), cleanKeyFilename);
-          
-          this.logger.log('Using Google Cloud credentials from file');
-          this.logger.log(`Key filename from config: ${keyFilename}`);
-          this.logger.log(`Key file path: ${keyFilePath}`);
-        
-        // Check if the key file exists
+      } else if (credentialsJson) {
+        // Local dev: credentials as file path
+        const keyFilePath = path.isAbsolute(credentialsJson)
+          ? credentialsJson
+          : path.join(process.cwd(), credentialsJson);
+        this.logger.log('Using Google Cloud credentials from file');
+        this.logger.log(`Key file path: ${keyFilePath}`);
         if (!fs.existsSync(keyFilePath)) {
           this.logger.error(`Google Cloud key file not found at: ${keyFilePath}`);
-          
-          // Try to find any .json file in the current directory
-          const files = fs.readdirSync(process.cwd()).filter((f: string) => f.endsWith('.json') && f.includes('ebs-cloud'));
-          this.logger.log(`Available GCP key files in current directory: ${files.join(', ')}`);
-          
-          if (files.length > 0) {
-            const fallbackKeyPath = path.join(process.cwd(), files[0]);
-            this.logger.log(`Using fallback key file: ${fallbackKeyPath}`);
-            
-            this.storage = new Storage({
-              keyFilename: fallbackKeyPath,
-              projectId,
-            });
-          } else {
-            // Try Application Default Credentials as last resort
-            this.logger.log('Trying Application Default Credentials (ADC)');
-            try {
-              this.storage = new Storage({
-                projectId,
-              });
-              this.logger.log('Using Application Default Credentials');
-            } catch (adcError) {
-              throw new Error(`Google Cloud key file not found and ADC failed. Tried: ${keyFilePath}. ADC Error: ${adcError.message}`);
-            }
-          }
-        } else {
-          this.storage = new Storage({
-            keyFilename: keyFilePath,
-            projectId,
-          });
+          throw new Error(`Google Cloud key file not found at: ${keyFilePath}`);
         }
+        this.storage = new Storage({ keyFilename: keyFilePath, projectId });
+      } else {
+        // Fallback: Application Default Credentials
+        this.logger.log('Using Application Default Credentials');
+        this.storage = new Storage({ projectId });
       }
-      
       this.logger.log('Google Cloud Storage initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize Google Cloud Storage:', {

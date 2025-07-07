@@ -145,15 +145,6 @@ jobs:
             GOOGLE_CLOUD_KEY_FILE=${{ secrets.GCP_SA_KEY }}
             AI_URL=https://ebs-ai-981332637673.asia-southeast2.run.app/predict
             CLIENT_ORIGIN=http://localhost:3000
-          flags: |
-            --port=8080
-            --memory=2Gi
-            --cpu=2
-            --min-instances=0
-            --max-instances=2
-            --concurrency=80
-            --timeout=900
-            --allow-unauthenticated
 
       # If required, use the Cloud Run url output in later steps
       - name: Show Output

@@ -33,7 +33,6 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
-COPY --chown=nestjs:nodejs ./ebs-cloud-*.json ./
 
 # Create uploads directory
 RUN mkdir -p uploads && chown nestjs:nodejs uploads

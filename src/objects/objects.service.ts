@@ -5,9 +5,12 @@ import { DetectedObject } from './entities/object.entity';
 import { Scan } from '../scans/entities/scan.entity';
 import { PaginationDto, PaginatedResponse } from '../common/dto/pagination.dto';
 import { CreateObjectDto } from './dto/object.dto';
+import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class ObjectsService {
+  private readonly logger = new Logger(ObjectsService.name);
+
   constructor(
     @InjectRepository(DetectedObject)
     private objectRepository: Repository<DetectedObject>,
@@ -174,5 +177,15 @@ export class ObjectsService {
       objects_count: objectsCount,
       total_estimated_value: totalEstimatedValue,
     });
+  }
+
+  async delete(id: string, userId: string): Promise<void> {
+    this.logger.debug(`Deleting object ${id} by user ${userId}`);
+    const result = await this.objectRepository.delete(id);
+    if (!result.affected) {
+      this.logger.warn(`Object ${id} not found for deletion`);
+      throw new NotFoundException('Object not found');
+    }
+    this.logger.log(`Object ${id} deleted by user ${userId}`);
   }
 } 

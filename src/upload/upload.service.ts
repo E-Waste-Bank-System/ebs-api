@@ -19,7 +19,7 @@ export class UploadService {
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
     
     try {
-      const credentialsJson = this.configService.get('         GOOGLE_CLOUD_KEY_FILE ');
+      const credentialsJson = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
       if (credentialsJson && credentialsJson.trim().startsWith('{')) {
         // Cloud Run/production: credentials as JSON string in env var
         this.logger.log('Using Google Cloud credentials from JSON content (Cloud Run/production)');

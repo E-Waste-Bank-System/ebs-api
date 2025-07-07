@@ -39,9 +39,9 @@ export class ScansService {
         this.logger.log(`Using Google Cloud credentials from file: ${credentialsPath}`);
         this.storage = new Storage({ keyFilename: credentialsPath, projectId });
       }
-      // Priority 2: Try to parse GOOGLE_CLOUD_KEY_FILE as JSON (fallback)
-      else if (this.configService.get('GOOGLE_CLOUD_KEY_FILE')) {
-        const credentialsJson = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
+      // Priority 2: Try to parse GOOGLE_APPLICATION_CREDENTIALS as JSON (fallback)
+      else if (this.configService.get('GOOGLE_APPLICATION_CREDENTIALS')) {
+        const credentialsJson = this.configService.get('GOOGLE_APPLICATION_CREDENTIALS');
         this.logger.log('Attempting to use Google Cloud credentials from JSON environment variable');
         
         try {

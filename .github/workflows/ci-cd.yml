@@ -123,9 +123,7 @@ jobs:
         with:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
-          # NOTE: If using a pre-built image, update the image name here
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE }}:${{ github.sha }}
-          # Set environment variables for the Cloud Run service
           env_vars: |
             NODE_ENV=production
             JWT_SECRET=c94xKfchSj64JJqI7cMKZbIs4n/6pB920TcQlzURwln+IV5SP+G1jIHg5u4hUVHqb9QanSU6hX+7FGr/iTQpiQ==
@@ -138,11 +136,9 @@ jobs:
             GOOGLE_CLIENT_ID=981332637673-otgo810evdbis5hd6oa6pkiq4ha6dq3e.apps.googleusercontent.com
             AI_URL=https://ebs-ai-981332637673.asia-southeast2.run.app/predict
             CLIENT_ORIGIN=http://localhost:3000
-          # Mount the service account key as a file
+            GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa-key.json
           secrets: |
-            GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-key.json
-          secret_volumes: |
-            gcp-key=${{ secrets.GCP_SA_KEY }}
+            SA_KEY:/secrets/sa-key.json
 
       # If required, use the Cloud Run url output in later steps
       - name: Show Output

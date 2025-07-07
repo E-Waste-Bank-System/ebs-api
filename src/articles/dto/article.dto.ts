@@ -156,15 +156,15 @@ export class ArticleResponseDto {
     properties: {
       id: { type: 'string' },
       email: { type: 'string' },
-      name: { type: 'string' },
-      role: { type: 'string' }
+      full_name: { type: 'string' },
+      avatar_url: { type: 'string' }
     }
   })
   author?: {
     id: string;
     email: string;
-    name: string;
-    role: string;
+    full_name: string;
+    avatar_url?: string;
   };
 }
 

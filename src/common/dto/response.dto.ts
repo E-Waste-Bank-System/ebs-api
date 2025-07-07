@@ -1,22 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class ApiResponseDto<T = any> {
-  @ApiProperty({ description: 'Response status' })
-  success: boolean;
-
-  @ApiProperty({ description: 'Response message' })
-  message: string;
-
-  @ApiPropertyOptional({ description: 'Response data' })
-  data?: T;
-
-  @ApiPropertyOptional({ description: 'Error details' })
-  error?: string;
-
-  @ApiProperty({ description: 'Response timestamp' })
-  timestamp: string;
-}
-
 export class ErrorResponseDto {
   @ApiProperty({ description: 'HTTP status code' })
   statusCode: number;
@@ -32,14 +15,6 @@ export class ErrorResponseDto {
 
   @ApiProperty({ description: 'Request path' })
   path: string;
-}
-
-export class SuccessResponseDto {
-  @ApiProperty({ description: 'Success message' })
-  message: string;
-
-  @ApiProperty({ description: 'Response timestamp' })
-  timestamp: string;
 }
 
 export class HealthResponseDto {

@@ -21,6 +21,7 @@ import { Article } from './articles/entities/article.entity';
 import { Scan } from './scans/entities/scan.entity';
 import { DetectedObject } from './objects/entities/object.entity';
 import { RetrainingData } from './retraining/entities/retraining.entity';
+import { AppLogger } from './common/utils/logger.util';
 
 @Module({
   imports: [
@@ -36,14 +37,15 @@ import { RetrainingData } from './retraining/entities/retraining.entity';
       useFactory: (configService: ConfigService) => {
         const databaseUrl = configService.get('DATABASE_URL');
         const isProduction = configService.get('NODE_ENV') === 'production';
+        const logger = AppLogger.getInstance('Database');
         
-        console.log('Database configuration:');
-        console.log('- Environment:', configService.get('NODE_ENV'));
-        console.log('- Database URL configured:', !!databaseUrl);
-        console.log('- Production mode:', isProduction);
+        logger.logInfo('Database configuration:');
+        logger.logInfo(`- Environment: ${configService.get('NODE_ENV')}`);
+        logger.logInfo(`- Database URL configured: ${!!databaseUrl}`);
+        logger.logInfo(`- Production mode: ${isProduction}`);
         
         if (!databaseUrl) {
-          console.error('❌ DATABASE_URL is not configured');
+          logger.logError('❌ DATABASE_URL is not configured');
           throw new Error('DATABASE_URL environment variable is required');
         }
         

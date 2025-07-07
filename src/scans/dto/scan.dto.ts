@@ -135,4 +135,10 @@ export class DeleteScanResponseDto {
     example: '123e4567-e89b-12d3-a456-426614174000'
   })
   deletedScanId: string;
+
+  @ApiProperty({
+    description: 'Timestamp when the scan was deleted',
+    example: '2024-01-15T10:30:00.000Z'
+  })
+  deleted_at: string;
 } 

@@ -1,20 +1,20 @@
-import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { Controller, Post, Get, Body } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto, GenerateTokenDto, AuthResponseDto } from './dto/auth.dto';
 import { Public } from './decorators/public.decorator';
-import { Roles } from './decorators/roles.decorator';
 import { UserRole } from '../common/enums/role.enum';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { RolesGuard } from './guards/roles.guard';
 import { GetUser } from './decorators/get-user.decorator';
 import { ErrorResponseDto } from '../common/dto/response.dto';
+import { Auth } from '../common/decorators/auth.decorator';
+import { AppLogger } from '../common/utils/logger.util';
 
 @ApiTags('🔐 Authentication')
 @Controller('auth')
-@UseGuards(ThrottlerGuard)
 export class AuthController {
+  private readonly logger = AppLogger.getInstance('AuthController');
+
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
@@ -89,6 +89,7 @@ export class AuthController {
     type: ErrorResponseDto
   })
   async login(@Body() loginDto: LoginDto): Promise<AuthResponseDto> {
+    this.logger.logDebug(`Login attempt for email: ${loginDto.email}`);
     return this.authService.login(loginDto);
   }
 
@@ -139,12 +140,12 @@ export class AuthController {
     type: ErrorResponseDto
   })
   async generateToken(@Body() generateTokenDto: GenerateTokenDto): Promise<AuthResponseDto> {
+    this.logger.logDebug(`Token generation requested for user: ${generateTokenDto.user_id}`);
     return this.authService.generateTokenForGoogleUser(generateTokenDto.user_id);
   }
 
   @Get('profile')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth('JWT-auth')
+  @Auth(UserRole.USER, UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
     summary: 'Get current user profile',
     description: 'Retrieve the profile information of the currently authenticated user'
@@ -174,6 +175,7 @@ export class AuthController {
     type: ErrorResponseDto
   })
   async getProfile(@GetUser() user: any) {
+    this.logger.logDebug(`Profile requested for user: ${user.id}`);
     return this.authService.getCurrentUser(user.id);
   }
 
@@ -197,21 +199,33 @@ export class AuthController {
     }
   })
   async debugJwt() {
+    this.logger.logDebug('JWT debug endpoint accessed');
     return this.authService.debugJwtConfig();
   }
 
-  @Post('verify-token')
+  @Post('verify')
   @Public()
   @ApiOperation({ 
-    summary: 'Verify JWT token manually',
-    description: '🔧 Manually verify the validity of a JWT token - useful for debugging and testing'
+    summary: 'Verify JWT token validity',
+    description: `
+      Verify if a JWT token is valid and not expired.
+      
+      **Use Cases:**
+      - Frontend token validation
+      - Token refresh logic
+      - Debugging authentication issues
+      
+      **Response:**
+      - Valid token: Returns decoded payload
+      - Invalid token: Returns error details
+    `
   })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        token: { 
-          type: 'string', 
+        token: {
+          type: 'string',
           description: 'JWT token to verify',
           example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
         }
@@ -221,70 +235,82 @@ export class AuthController {
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'Token verification result',
+    description: 'Token is valid',
     schema: {
       type: 'object',
       properties: {
         valid: { type: 'boolean', example: true },
-        decoded: { 
+        payload: {
           type: 'object',
           properties: {
             sub: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
             email: { type: 'string', example: 'user@example.com' },
             role: { type: 'string', example: 'USER' },
-            iat: { type: 'number', example: 1642618800 },
-            exp: { type: 'number', example: 1642705200 }
+            iat: { type: 'number', example: 1642234567 },
+            exp: { type: 'number', example: 1642320967 }
           }
-        },
-        message: { type: 'string', example: 'Token is valid' }
+        }
       }
     }
   })
+  @ApiResponse({ 
+    status: 401, 
+    description: 'Token is invalid or expired',
+    type: ErrorResponseDto
+  })
   async verifyToken(@Body() body: { token: string }) {
+    this.logger.logDebug('Token verification requested');
     return this.authService.verifyTokenManually(body.token);
   }
 
   @Post('sync-users')
-  @Public()
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
-    summary: 'Sync Supabase users to local database',
+    summary: 'Sync users from Supabase Auth (Admin)',
     description: `
-      **⚠️ Administrative Function**
+      🔒 Admin Only Operation
       
-      Synchronize all users from Supabase Auth to the local profiles database.
-      This endpoint is temporarily public for testing but should be restricted in production.
+      Synchronize all users from Supabase Auth to the local database.
+      This ensures all Supabase users have corresponding local profiles.
       
-      **What it does:**
-      - Fetches all users from Supabase Auth
-      - Creates missing profiles in local database
-      - Updates existing profiles with latest data
-      - Cleans up invalid entries
+      **Process:**
+      1. Fetches all users from Supabase Auth
+      2. Creates local profiles for new users
+      3. Updates existing profiles with latest data
+      4. Cleans up profiles with invalid emails
       
       **Use Cases:**
-      - Initial data migration
-      - Sync after bulk user operations
-      - Recovery from data inconsistencies
+      - Initial system setup
+      - Data consistency maintenance
+      - Recovery from sync issues
+      - Bulk user management
     `
   })
   @ApiResponse({ 
     status: 200, 
-    description: 'Users synchronized successfully',
+    description: 'User synchronization completed successfully',
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'User sync completed successfully' },
-        synced: { type: 'number', example: 15 },
-        skipped: { type: 'number', example: 3 },
-        total: { type: 'number', example: 18 }
+        message: { type: 'string', example: 'User synchronization completed' },
+        synced: { type: 'number', example: 25 },
+        skipped: { type: 'number', example: 5 },
+        cleaned: { type: 'number', example: 2 }
       }
     }
   })
   @ApiResponse({ 
-    status: 500, 
-    description: 'Synchronization failed',
+    status: 401, 
+    description: 'Unauthorized - authentication required',
+    type: ErrorResponseDto
+  })
+  @ApiResponse({ 
+    status: 403, 
+    description: 'Forbidden - admin access required',
     type: ErrorResponseDto
   })
   async syncUsers() {
+    this.logger.logInfo('User synchronization requested by admin');
     return this.authService.syncAllUsers();
   }
 } 

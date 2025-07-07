@@ -5,13 +5,16 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { AppLogger } from './common/utils/logger.util';
 
 async function bootstrap() {
+  const logger = AppLogger.getInstance('Bootstrap');
+  
   try {
-    console.log('🚀 Starting EBS API...');
-    console.log('Environment:', process.env.NODE_ENV || 'development');
-    console.log('Port:', process.env.PORT || 8080);
-    console.log('Database URL configured:', !!process.env.DATABASE_URL);
+    logger.logInfo('🚀 Starting EBS API...');
+    logger.logInfo(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.logInfo(`Port: ${process.env.PORT || 8080}`);
+    logger.logInfo(`Database URL configured: ${!!process.env.DATABASE_URL}`);
     
     const app = await NestFactory.create<NestExpressApplication>(AppModule, {
       logger: ['error', 'warn', 'log'],
@@ -23,7 +26,7 @@ async function bootstrap() {
         prefix: '/uploads/',
       });
     } catch (error) {
-      console.warn('⚠️ Could not set up static assets:', error.message);
+      logger.logWarn('⚠️ Could not set up static assets:', error.message);
     }
 
     // Global prefix
@@ -35,14 +38,14 @@ async function bootstrap() {
           process.env.CLIENT_ORIGIN, 
           'https://ebs-web-981332637673.asia-southeast2.run.app',
           'http://localhost:3000',
-          'https://ewastehub.netlify.app'	 // Allow localhost for testing
+          'https://ewastehub.netlify.app'
         ] 
       : [
           process.env.CLIENT_ORIGIN || 'http://localhost:3000', 
           'http://localhost:3001'
         ];
     
-    console.log('Allowed CORS origins:', allowedOrigins);
+    logger.logInfo(`Allowed CORS origins: ${allowedOrigins.join(', ')}`);
     
     app.enableCors({
       origin: allowedOrigins,
@@ -193,22 +196,22 @@ All responses follow consistent JSON structures with proper HTTP status codes an
     
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document);
-    console.log('📖 API Documentation available at /api/docs');
+    logger.logInfo('📖 API Documentation available at /api/docs');
 
     // Use port 8080 for Cloud Run, fallback to 3000 for local development
     const port = process.env.PORT || 8080;
     await app.listen(port, '0.0.0.0');
     
-    console.log(`🚀 Application is running on port: ${port}`);
-    console.log(`🌐 Health check available at: /health`);
-    console.log(`📋 API info available at: /`);
-    console.log(`📖 API Documentation: http://localhost:${port}/api/docs`);
+    logger.logInfo(`🚀 Application is running on port: ${port}`);
+    logger.logInfo(`🌐 Health check available at: /health`);
+    logger.logInfo(`📋 API info available at: /`);
+    logger.logInfo(`📖 API Documentation: http://localhost:${port}/api/docs`);
   } catch (error) {
-    console.error('❌ Failed to start application:', error);
+    logger.logError('❌ Failed to start application:', error);
     
     // In production, try to start a minimal server even if database fails
     if (process.env.NODE_ENV === 'production') {
-      console.log('🔄 Attempting to start minimal server...');
+      logger.logInfo('🔄 Attempting to start minimal server...');
       try {
         const express = require('express');
         const app = express();
@@ -230,10 +233,10 @@ All responses follow consistent JSON structures with proper HTTP status codes an
         
         const port = process.env.PORT || 8080;
         app.listen(port, '0.0.0.0', () => {
-          console.log(`🆘 Minimal server running on port ${port}`);
+          logger.logInfo(`🆘 Minimal server running on port ${port}`);
         });
       } catch (fallbackError) {
-        console.error('❌ Failed to start minimal server:', fallbackError);
+        logger.logError('❌ Failed to start minimal server:', fallbackError);
         process.exit(1);
       }
     } else {
@@ -243,6 +246,7 @@ All responses follow consistent JSON structures with proper HTTP status codes an
 }
 
 bootstrap().catch((error) => {
-  console.error('❌ Bootstrap failed:', error);
+  const logger = AppLogger.getInstance('Bootstrap');
+  logger.logError('❌ Bootstrap failed:', error);
   process.exit(1);
 }); 

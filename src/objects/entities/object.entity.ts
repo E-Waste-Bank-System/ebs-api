@@ -22,7 +22,16 @@ export class DetectedObject extends BaseEntity {
     height: number;
   };
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({ 
+    type: 'decimal', 
+    precision: 12, 
+    scale: 2, 
+    nullable: true,
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | null) => value ? parseFloat(value) : null
+    }
+  })
   estimated_value?: number;
 
   @Column({ type: 'int', default: 1 })

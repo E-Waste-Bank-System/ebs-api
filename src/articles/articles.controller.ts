@@ -7,15 +7,13 @@ import {
   Body, 
   Param, 
   Query, 
-  UseGuards,
   ParseUUIDPipe,
   Request,
-  Logger,
   BadRequestException,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { plainToClass } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -30,18 +28,19 @@ import {
 } from './dto/article.dto';
 import { ArticleStatus } from './entities/article.entity';
 import { Public } from '../auth/decorators/public.decorator';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { PaginatedResponse } from '../common/dto/pagination.dto';
 import { ErrorResponseDto } from '../common/dto/response.dto';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { UploadService } from '../upload/upload.service';
+import { Auth } from '../common/decorators/auth.decorator';
+import { AppLogger } from '../common/utils/logger.util';
 
 @ApiTags('📚 Articles')
 @Controller('articles')
 export class ArticlesController {
+  private readonly logger = AppLogger.getInstance('ArticlesController');
+
   constructor(private readonly articlesService: ArticlesService) {}
 
   @Public()
@@ -77,6 +76,7 @@ export class ArticlesController {
     }
   })
   async findAll(@Query() query: ArticleQueryDto): Promise<PaginatedResponse<ArticleListDto>> {
+    this.logger.logDebug(`Public articles requested with query: ${JSON.stringify(query)}`);
     const result = await this.articlesService.findAllPublic(query);
     
     return {
@@ -118,6 +118,7 @@ export class ArticlesController {
     type: ErrorResponseDto
   })
   async findOneBySlug(@Param('slug') slug: string): Promise<ArticleResponseDto> {
+    this.logger.logDebug(`Article requested by slug: ${slug}`);
     const article = await this.articlesService.findOneBySlug(slug);
     
     return {
@@ -139,11 +140,8 @@ export class ArticlesController {
 
 @ApiTags('👨‍💼 Admin - Articles')
 @Controller('admin/articles')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
-@ApiBearerAuth('JWT-auth')
 export class AdminArticlesController {
-  private readonly logger = new Logger(AdminArticlesController.name);
+  private readonly logger = AppLogger.getInstance('AdminArticlesController');
 
   constructor(
     private readonly articlesService: ArticlesService,
@@ -151,6 +149,7 @@ export class AdminArticlesController {
   ) {}
 
   @Get()
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
     summary: 'List all articles (admin)',
     description: 'Retrieve all articles including drafts and archived content'
@@ -192,6 +191,7 @@ export class AdminArticlesController {
     type: ErrorResponseDto
   })
   async findAll(@Query() query: ArticleQueryDto): Promise<PaginatedResponse<ArticleResponseDto>> {
+    this.logger.logDebug(`Admin articles requested with query: ${JSON.stringify(query)}`);
     const result = await this.articlesService.findAll(query);
     
     return {
@@ -205,177 +205,116 @@ export class AdminArticlesController {
         status: article.status,
         tags: article.tags,
         view_count: article.view_count,
+        meta_title: article.meta_title,
+        meta_description: article.meta_description,
+        is_featured: article.is_featured,
         created_at: article.created_at,
         updated_at: article.updated_at,
         published_at: article.published_at,
+        author: article.author ? {
+          id: article.author.id,
+          email: article.author.email,
+          full_name: article.author.full_name,
+          avatar_url: article.author.avatar_url,
+        } : undefined,
       })),
       meta: result.meta,
     };
   }
 
   @Post()
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @UseInterceptors(FileInterceptor('featured_image'))
   @ApiOperation({ 
     summary: 'Create new article',
     description: `
       Create a new article with optional featured image upload.
       
-      **Features:**
-      - Accepts article data as JSON or form fields
-      - Optional featured image upload via multipart/form-data
-      - Automatic slug generation with uniqueness check
-      - EditorJS content structure support
-      - Comprehensive validation and error handling
+      **Content Format:**
+      - Supports EditorJS JSON format for rich content
+      - Plain text content also supported
+      - HTML content can be embedded
       
-      **Content Structure:**
-      The content field accepts EditorJS format with blocks like paragraph, header, list, etc.
+      **Image Upload:**
+      - Featured image is optional
+      - Supports JPG, PNG, WebP formats
+      - Max file size: 5MB
+      - Automatically optimized and stored in cloud storage
     `
   })
-  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiConsumes('multipart/form-data')
   @ApiBody({
-    description: 'Article data with optional featured image',
+    description: 'Article creation data with optional image',
     schema: {
       type: 'object',
       properties: {
-        title: {
-          type: 'string',
-          description: 'Article title',
-          example: 'Complete Guide to E-Waste Recycling'
-        },
-        content: {
-          type: 'string',
-          description: 'Article content in EditorJS JSON format (as string)',
-          example: '{"blocks":[{"type":"paragraph","data":{"text":"Content here..."}}]}'
-        },
-        excerpt: {
-          type: 'string',
-          description: 'Brief article summary',
-          example: 'Learn about proper e-waste disposal methods.'
-        },
-        tags: {
-          type: 'string',
-          description: 'Comma-separated tags',
-          example: 'recycling,environment,technology'
-        },
-        status: {
-          type: 'string',
-          enum: ['draft', 'published', 'archived'],
-          description: 'Article publication status',
-          example: 'draft'
-        },
-        meta_title: {
-          type: 'string',
-          description: 'SEO meta title',
-          example: 'E-Waste Recycling Guide - Complete Tutorial'
-        },
-        meta_description: {
-          type: 'string',
-          description: 'SEO meta description',
-          example: 'Comprehensive guide to e-waste recycling and disposal.'
-        },
+        title: { type: 'string', example: 'Ultimate Guide to E-Waste Recycling' },
+        content: { type: 'string', description: 'Article content (EditorJS JSON or plain text)' },
+        excerpt: { type: 'string', example: 'Learn everything about e-waste recycling...' },
+        status: { enum: ['draft', 'published', 'archived'], example: 'draft' },
+        tags: { type: 'array', items: { type: 'string' }, example: ['recycling', 'e-waste'] },
+        meta_title: { type: 'string', example: 'SEO Title for E-Waste Guide' },
+        meta_description: { type: 'string', example: 'SEO description for the article' },
+        is_featured: { type: 'boolean', example: false },
         featured_image: {
           type: 'string',
           format: 'binary',
-          description: 'Optional featured image file'
+          description: 'Featured image file (optional)'
         }
       },
       required: ['title', 'content']
     }
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Article created successfully',
-    type: ArticleResponseDto 
+    type: ArticleResponseDto
   })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Validation error or invalid content format' 
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - invalid data or missing required fields',
+    type: ErrorResponseDto
   })
-  @ApiResponse({ 
-    status: 401, 
-    description: 'Unauthorized - Invalid or missing token' 
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT token required',
+    type: ErrorResponseDto
   })
-  @ApiResponse({ 
-    status: 403, 
-    description: 'Forbidden - Insufficient permissions' 
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - admin role required',
+    type: ErrorResponseDto
   })
   async create(
     @Body() createArticleDto: any, // Use any to handle both JSON and form data
     @UploadedFile() file: any,
     @GetUser() user: any,
   ): Promise<ArticleResponseDto> {
+    this.logger.logDebug(`Article creation requested by user: ${user.id}`);
+    
     try {
-      this.logger.log(`Create article request - File present: ${!!file}`);
-      this.logger.log(`Create article request - Body keys: ${Object.keys(createArticleDto)}`);
-      this.logger.log(`Create article request - Body: ${JSON.stringify(createArticleDto)}`);
-      
-      // Handle both multipart form data and JSON requests
-      let articleData: CreateArticleDto;
-      
-      if (file || createArticleDto.title) {
-        // If file is present OR we have form data, we're dealing with multipart/form-data
-        // Parse form fields into proper DTO structure
-        
-        let parsedContent = createArticleDto.content;
-        if (typeof createArticleDto.content === 'string') {
-          try {
-            parsedContent = JSON.parse(createArticleDto.content);
-            this.logger.log(`Successfully parsed content JSON`);
-          } catch (parseError) {
-            this.logger.error(`Failed to parse content JSON: ${parseError.message}`);
-            this.logger.error(`Content value: ${createArticleDto.content}`);
-            throw new BadRequestException('Invalid JSON format in content field');
-          }
-        }
-        
-        articleData = {
-          title: createArticleDto.title,
-          content: parsedContent,
-          excerpt: createArticleDto.excerpt,
-          tags: typeof createArticleDto.tags === 'string' 
-            ? createArticleDto.tags.split(',').map(tag => tag.trim())
-            : createArticleDto.tags,
-          status: createArticleDto.status || ArticleStatus.DRAFT,
-          meta_title: createArticleDto.meta_title,
-          meta_description: createArticleDto.meta_description,
-        };
-
-        // Upload the featured image if provided
-        if (file) {
-          this.logger.log(`Uploading file: ${file.originalname}, size: ${file.size}`);
-          const uploadedUrl = await this.uploadService.uploadFile(file, 'articles/featured-images');
-          articleData.featured_image = uploadedUrl;
-          this.logger.log(`File uploaded successfully: ${uploadedUrl}`);
-        }
-      } else {
-        // Regular JSON request
-        articleData = createArticleDto;
+      // Handle featured image upload if provided
+      let featuredImageUrl: string | undefined;
+      if (file) {
+        this.logger.logDebug(`Processing featured image upload: ${file.originalname}`);
+        featuredImageUrl = await this.uploadService.uploadFile(file, 'articles');
       }
 
-      this.logger.log(`Parsed article data: ${JSON.stringify(articleData)}`);
+      // Transform and validate the DTO
+      const dto = plainToClass(CreateArticleDto, {
+        ...createArticleDto,
+        featured_image: featuredImageUrl,
+        author_id: user.id,
+      });
 
-      // Validate the parsed data
-      const validatedData = plainToClass(CreateArticleDto, articleData);
-      const errors = await validate(validatedData);
-      
+      const errors = await validate(dto);
       if (errors.length > 0) {
-        this.logger.error(`Validation errors: ${JSON.stringify(errors.map(error => ({
-          property: error.property,
-          value: error.value,
-          constraints: error.constraints
-        })))}`);
-        
-        throw new BadRequestException({
-          message: 'Validation failed',
-          errors: errors.map(error => ({
-            property: error.property,
-            value: error.value,
-            constraints: error.constraints
-          }))
-        });
+        this.logger.logError('Article creation validation failed:', errors);
+        throw new BadRequestException('Invalid article data');
       }
 
-      const article = await this.articlesService.create(validatedData, user.id);
+      const article = await this.articlesService.create(dto, user.id);
+      this.logger.logInfo(`Article created successfully: ${article.id}`);
       
       return {
         id: article.id,
@@ -387,32 +326,30 @@ export class AdminArticlesController {
         status: article.status,
         tags: article.tags,
         view_count: article.view_count,
-        is_featured: article.is_featured,
         meta_title: article.meta_title,
         meta_description: article.meta_description,
-        published_at: article.published_at,
+        is_featured: article.is_featured,
         created_at: article.created_at,
         updated_at: article.updated_at,
-        author: {
+        published_at: article.published_at,
+        author: article.author ? {
           id: article.author.id,
           email: article.author.email,
-          name: article.author.full_name || article.author.email,
-          role: article.author.role,
-        },
+          full_name: article.author.full_name,
+          avatar_url: article.author.avatar_url,
+        } : undefined,
       };
     } catch (error) {
-      this.logger.error(`Failed to create article: ${error.message}`, error.stack);
-      if (error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to create article');
+      this.logger.logError('Article creation failed:', error);
+      throw error;
     }
   }
 
   @Get(':id')
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
     summary: 'Get article by ID (admin)',
-    description: 'Retrieve any article by ID including drafts and archived content'
+    description: 'Retrieve a specific article by ID with full admin access'
   })
   @ApiParam({ 
     name: 'id', 
@@ -430,6 +367,7 @@ export class AdminArticlesController {
     type: ErrorResponseDto
   })
   async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ArticleResponseDto> {
+    this.logger.logDebug(`Admin article requested by ID: ${id}`);
     const article = await this.articlesService.findOne(id);
     
     return {
@@ -442,31 +380,37 @@ export class AdminArticlesController {
       status: article.status,
       tags: article.tags,
       view_count: article.view_count,
+      meta_title: article.meta_title,
+      meta_description: article.meta_description,
+      is_featured: article.is_featured,
       created_at: article.created_at,
       updated_at: article.updated_at,
       published_at: article.published_at,
+      author: article.author ? {
+        id: article.author.id,
+        email: article.author.email,
+        full_name: article.author.full_name,
+        avatar_url: article.author.avatar_url,
+      } : undefined,
     };
   }
 
   @Patch(':id')
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
     summary: 'Update article',
-    description: 'Update article content, status, or metadata'
+    description: 'Update an existing article with new data'
   })
   @ApiParam({ 
     name: 'id', 
     description: 'Article UUID',
     example: '123e4567-e89b-12d3-a456-426614174000'
   })
+  @ApiBody({ type: UpdateArticleDto })
   @ApiResponse({
     status: 200,
     description: 'Article updated successfully',
     type: ArticleResponseDto
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Validation error - invalid input data',
-    type: ErrorResponseDto
   })
   @ApiResponse({
     status: 404,
@@ -477,6 +421,7 @@ export class AdminArticlesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateArticleDto: UpdateArticleDto,
   ): Promise<ArticleResponseDto> {
+    this.logger.logDebug(`Article update requested for ID: ${id}`);
     const article = await this.articlesService.update(id, updateArticleDto);
     
     return {
@@ -489,16 +434,26 @@ export class AdminArticlesController {
       status: article.status,
       tags: article.tags,
       view_count: article.view_count,
+      meta_title: article.meta_title,
+      meta_description: article.meta_description,
+      is_featured: article.is_featured,
       created_at: article.created_at,
       updated_at: article.updated_at,
       published_at: article.published_at,
+      author: article.author ? {
+        id: article.author.id,
+        email: article.author.email,
+        full_name: article.author.full_name,
+        avatar_url: article.author.avatar_url,
+      } : undefined,
     };
   }
 
   @Delete(':id')
+  @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({ 
     summary: 'Delete article',
-    description: 'Soft delete an article (can be recovered by admins)'
+    description: 'Permanently delete an article and all associated data'
   })
   @ApiParam({ 
     name: 'id', 
@@ -521,7 +476,9 @@ export class AdminArticlesController {
     type: ErrorResponseDto
   })
   async remove(@Param('id', ParseUUIDPipe) id: string): Promise<{ message: string }> {
+    this.logger.logDebug(`Article deletion requested for ID: ${id}`);
     await this.articlesService.remove(id);
+    this.logger.logInfo(`Article deleted successfully: ${id}`);
     return { message: 'Article deleted successfully' };
   }
 } 

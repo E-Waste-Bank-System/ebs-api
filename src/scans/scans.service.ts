@@ -330,10 +330,22 @@ export class ScansService {
 
     // Calculate totals
     const objectsCount = objects.length;
-    const totalEstimatedValue = objects.reduce((sum, obj) => {
-      const value = parseFloat(obj.estimated_value?.toString() || '0');
-      return sum + (isNaN(value) ? 0 : value);
-    }, 0);
+    let totalEstimatedValue = 0;
+    let objectsWithValues = 0;
+    
+    for (const obj of objects) {
+      if (obj.estimated_value != null) {
+        const value = parseFloat(obj.estimated_value.toString());
+        if (!isNaN(value) && isFinite(value)) {
+          totalEstimatedValue += value;
+          objectsWithValues++;
+        } else {
+          this.logger.warn(`Invalid estimated_value for object ${obj.id}: ${obj.estimated_value}`);
+        }
+      } else {
+        this.logger.warn(`Object ${obj.id} has null estimated_value`);
+      }
+    }
 
     // Update the scan
     await this.scanRepository.update(scanId, {
@@ -341,7 +353,7 @@ export class ScansService {
       total_estimated_value: totalEstimatedValue,
     });
 
-    this.logger.log(`Recalculated totals for scan ${scanId}: ${objectsCount} objects, total value: ${totalEstimatedValue}`);
+    this.logger.log(`Recalculated totals for scan ${scanId}: ${objectsCount} objects (${objectsWithValues} with values), total value: ${totalEstimatedValue}`);
   }
 
   async recalculateAllScanTotals(): Promise<void> {
@@ -400,13 +412,46 @@ export class ScansService {
 
       const aiResult: AIResponseDto = await aiResponse.json();
       this.logger.log(`AI service returned ${aiResult.predictions?.length || 0} predictions`);
+      
+      // Log the full AI response for debugging
+      this.logger.log(`Full AI response: ${JSON.stringify(aiResult, null, 2)}`);
 
       // Process AI predictions and save detected objects
       const detectedObjects = [];
 
       for (const prediction of aiResult.predictions || []) {
+        // Log each prediction for debugging
+        this.logger.log(`Processing prediction:`, {
+          id: prediction.id,
+          category: prediction.category,
+          confidence: prediction.confidence,
+          regression_result: prediction.regression_result,
+          regression_result_type: typeof prediction.regression_result,
+          description: prediction.description?.substring(0, 50) + '...',
+          risk_lvl: prediction.risk_lvl,
+          damage_level: prediction.damage_level,
+        });
+
+        // Simple and direct conversion of regression_result to estimated_value
+        const regressionResult = prediction.regression_result;
+        let estimatedValue = null;
+        
+        if (regressionResult !== null && regressionResult !== undefined) {
+          // Convert to number, handle both string and number inputs
+          const numericValue = typeof regressionResult === 'number' ? regressionResult : parseFloat(String(regressionResult));
+          
+          if (!isNaN(numericValue) && isFinite(numericValue)) {
+            estimatedValue = numericValue;
+            this.logger.log(`✓ Valid estimated value: ${estimatedValue}`);
+          } else {
+            this.logger.error(`✗ Invalid regression_result: ${regressionResult} -> ${numericValue}`);
+          }
+        } else {
+          this.logger.error(`✗ Missing regression_result for prediction ${prediction.id}`);
+        }
+
         const detectedObject = this.objectRepository.create({
-          name: prediction.category, // Using category as name
+          name: prediction.category,
           category: prediction.category,
           confidence_score: prediction.confidence,
           bounding_box: {
@@ -415,7 +460,7 @@ export class ScansService {
             width: prediction.bbox[2] - prediction.bbox[0],
             height: prediction.bbox[3] - prediction.bbox[1],
           },
-          estimated_value: prediction.regression_result,
+          estimated_value: estimatedValue,
           risk_level: prediction.risk_lvl,
           damage_level: prediction.damage_level,
           description: prediction.description,
@@ -423,11 +468,17 @@ export class ScansService {
           ai_metadata: {
             id: prediction.id,
             detection_source: prediction.detection_source,
+            original_bbox: prediction.bbox,
+            original_regression_result: prediction.regression_result,
           },
           scan_id: scanId,
         });
 
+        this.logger.log(`Object created - estimated_value: ${detectedObject.estimated_value}`);
+
         const savedObject = await this.objectRepository.save(detectedObject);
+        this.logger.log(`Object saved - ID: ${savedObject.id}, estimated_value: ${savedObject.estimated_value}`);
+        
         detectedObjects.push(savedObject);
       }
 

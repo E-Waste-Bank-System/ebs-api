@@ -33,7 +33,7 @@ export class ScansService {
     this.logger.log(`Initializing Google Cloud Storage with bucket: ${this.bucketName}, project: ${projectId}`);
     
     try {
-      const credentialsJson = this.configService.get('GOOGLE_CLOUD_KEY_FILE');
+      const credentialsJson = this.configService.get('GOOGLE_APPLICATION_CREDENTIALS');
       if (credentialsJson && credentialsJson.trim().startsWith('{')) {
         this.logger.log('Using Google Cloud credentials from JSON content (Cloud Run/production)');
         try {

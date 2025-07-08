@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body } from '@nestjs/common';
+import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -10,6 +10,8 @@ import { ErrorResponseDto } from '../common/dto/response.dto';
 import { Auth } from '../common/decorators/auth.decorator';
 import { AppLogger } from '../common/utils/logger.util';
 import { UserProfileDto } from '../common/dto/user-profile.dto';
+import { UnauthorizedException } from '@nestjs/common';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @ApiTags('🔐 Authentication')
 @Controller('auth')
@@ -169,6 +171,7 @@ export class AuthController {
   }
 
   @Get('profile')
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ 
     summary: 'Get current user profile',
     description: `
@@ -219,8 +222,39 @@ export class AuthController {
     }
   })
   async getProfile(@GetUser() user: any) {
-    this.logger.logDebug(`Profile requested for user: ${user.id}`);
-    return this.authService.getCurrentUser(user.id);
+    this.logger.logDebug(`Profile requested for user: ${user?.id}, user object:`, user);
+    
+    if (!user || !user.id) {
+      this.logger.error('No user object or user ID found in request');
+      throw new UnauthorizedException('User not authenticated');
+    }
+    
+    try {
+      const profile = await this.authService.getCurrentUser(user.id);
+      this.logger.logDebug(`Profile retrieved successfully for user: ${profile.id} (${profile.email})`);
+      return profile;
+    } catch (error) {
+      this.logger.error(`Error getting profile for user ${user?.id}:`, error);
+      throw error;
+    }
+  }
+
+
+
+  @Post('verify-token')
+  @Public()
+  @ApiOperation({ 
+    summary: 'Verify JWT token manually',
+    description: 'Debug endpoint to verify JWT token'
+  })
+  async verifyToken(@Body() body: { token: string }) {
+    this.logger.logDebug(`Token verification requested`);
+    try {
+      const decoded = await this.authService.verifyTokenManually(body.token);
+      return { success: true, decoded };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 
   @Get('debug')
@@ -320,92 +354,6 @@ export class AuthController {
   async debug() {
     this.logger.logDebug('Debug endpoint accessed');
     return this.authService.debugAuthenticationInfo();
-  }
-
-  @Post('verify')
-  @Public()
-  @ApiOperation({ 
-    summary: 'Verify JWT token validity',
-    description: `
-      Verify if a JWT token is valid and not expired. This endpoint is useful for
-      client-side token validation without making authenticated API calls.
-      \n      **Token Verification:**
-      1. Client provides JWT token
-      2. System validates token signature and expiration
-      3. Returns verification result and token payload
-    `
-  })
-  @ApiBody({
-    type: VerifyTokenDto,
-    examples: {
-      valid: {
-        summary: 'Valid Token',
-        description: 'Verify a valid JWT token',
-        value: {
-          token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-        }
-      }
-    }
-  })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Token is valid',
-    schema: {
-      type: 'object',
-      properties: {
-        valid: { type: 'boolean', example: true },
-        payload: {
-          type: 'object',
-          properties: {
-            sub: { type: 'string', example: '123e4567-e89b-12d3-a456-426614174000' },
-            email: { type: 'string', example: 'user@example.com' },
-            role: { type: 'string', example: 'USER' },
-            iat: { type: 'number', example: 1705312200 },
-            exp: { type: 'number', example: 1705315800 }
-          }
-        },
-        expires_in: { type: 'number', example: 3600 }
-      }
-    },
-    example: {
-      valid: true,
-      payload: {
-        sub: '123e4567-e89b-12d3-a456-426614174000',
-        email: 'user@example.com',
-        role: 'USER',
-        iat: 1705312200,
-        exp: 1705315800
-      },
-      expires_in: 3600
-    }
-  })
-  @ApiResponse({ 
-    status: 400, 
-    description: 'Invalid token format or missing token',
-    type: ErrorResponseDto,
-    example: {
-      statusCode: 400,
-      message: 'Token is required',
-      error: 'Bad Request',
-      timestamp: '2024-01-15T10:30:00.000Z',
-      path: '/api/v1/auth/verify'
-    }
-  })
-  @ApiResponse({ 
-    status: 401, 
-    description: 'Token is invalid or expired',
-    type: ErrorResponseDto,
-    example: {
-      statusCode: 401,
-      message: 'Invalid or expired token',
-      error: 'Unauthorized',
-      timestamp: '2024-01-15T10:30:00.000Z',
-      path: '/api/v1/auth/verify'
-    }
-  })
-  async verifyToken(@Body() body: { token: string }) {
-    this.logger.logDebug('Token verification requested');
-    return this.authService.verifyTokenManually(body.token);
   }
 
   @Post('sync')

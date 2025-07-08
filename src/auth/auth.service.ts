@@ -52,8 +52,9 @@ export class AuthService {
 
       if (!profile) {
         console.log('Profile not found, creating from Supabase data...');
-        // Create new profile from Supabase user data
+        // Create new profile from Supabase user data with the correct ID
         profile = this.profileRepository.create({
+          id: data.user.id, // Set the ID directly to match Supabase user ID
           email: data.user.email,
           full_name: data.user.user_metadata?.full_name || data.user.email.split('@')[0],
           avatar_url: data.user.user_metadata?.avatar_url,
@@ -63,11 +64,7 @@ export class AuthService {
         });
         profile = await this.profileRepository.save(profile);
         
-        // Update the profile with the Supabase user ID after saving
-        profile.id = data.user.id;
-        profile = await this.profileRepository.save(profile);
-        
-        console.log('New profile created:', profile.id);
+        console.log('New profile created with ID:', profile.id);
       } else {
         console.log('Profile found, updating last login...');
         // Update last login
@@ -89,6 +86,10 @@ export class AuthService {
         expiresIn: this.configService.get('JWT_EXPIRES_IN') || '24h' 
       });
 
+      console.log('JWT token generated successfully');
+      console.log('JWT token length:', access_token.length);
+      console.log('JWT token preview:', access_token.substring(0, 50) + '...');
+
       console.log('Login successful for user:', profile.id);
 
       return {
@@ -108,15 +109,38 @@ export class AuthService {
   }
 
   async getCurrentUser(userId: string): Promise<Profile> {
-    const profile = await this.profileRepository.findOne({
-      where: { id: userId },
-    });
+    try {
+      console.log('Getting current user for ID:', userId);
+      
+      // Test database connection
+      const count = await this.profileRepository.count();
+      console.log('Database connection test - total profiles:', count);
+      
+      // Check if this specific user exists
+      const exists = await this.profileRepository.findOne({
+        where: { id: userId },
+        select: ['id'] // Only select ID to check existence
+      });
+      console.log('User exists check for ID:', userId, 'Result:', !!exists);
+      
+      const profile = await this.profileRepository.findOne({
+        where: { id: userId },
+      });
 
-    if (!profile) {
-      throw new UnauthorizedException('User not found');
+      if (!profile) {
+        console.log('Profile not found for user ID:', userId);
+        throw new UnauthorizedException('User not found');
+      }
+
+      console.log('Profile found:', { id: profile.id, email: profile.email, role: profile.role });
+      return profile;
+    } catch (error) {
+      console.error('Error in getCurrentUser:', error);
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Failed to retrieve user profile');
     }
-
-    return profile;
   }
 
   async validateGoogleLogin(profile: any): Promise<AuthResponseDto> {
@@ -216,8 +240,9 @@ export class AuthService {
             continue;
           }
 
-          // Create new profile
+          // Create new profile with the correct ID
           const profile = this.profileRepository.create({
+            id: supabaseUser.id, // Set the ID directly to match Supabase user ID
             email: supabaseUser.email,
             full_name: supabaseUser.user_metadata?.full_name || 
                       supabaseUser.user_metadata?.name || 
@@ -229,10 +254,6 @@ export class AuthService {
           });
 
           const savedProfile = await this.profileRepository.save(profile);
-          
-          // Update with Supabase user ID
-          savedProfile.id = supabaseUser.id;
-          await this.profileRepository.save(savedProfile);
 
           console.log(`Synced user: ${supabaseUser.email} (ID: ${supabaseUser.id})`);
           syncedCount++;
@@ -283,11 +304,16 @@ export class AuthService {
 
   async debugJwtConfig() {
     const jwtSecret = this.configService.get('JWT_SECRET');
+    const jwtExpiresIn = this.configService.get('JWT_EXPIRES_IN');
+    
+    console.log('JWT Configuration:');
+    console.log('- JWT_SECRET loaded:', jwtSecret ? 'Yes (length: ' + jwtSecret.length + ')' : 'No');
+    console.log('- JWT_EXPIRES_IN:', jwtExpiresIn || '24h (default)');
+    
     return {
-      hasJwtSecret: !!jwtSecret,
-      jwtSecretLength: jwtSecret ? jwtSecret.length : 0,
-      jwtSecretPreview: jwtSecret ? jwtSecret.substring(0, 10) + '...' : 'Not set',
-      nodeEnv: this.configService.get('NODE_ENV'),
+      jwtSecretLoaded: !!jwtSecret,
+      jwtSecretLength: jwtSecret?.length || 0,
+      jwtExpiresIn: jwtExpiresIn || '24h'
     };
   }
 
@@ -295,17 +321,11 @@ export class AuthService {
     try {
       const jwtSecret = this.configService.get('JWT_SECRET');
       const decoded = jwt.verify(token, jwtSecret);
-      return {
-        valid: true,
-        decoded,
-        message: 'Token is valid'
-      };
+      console.log('JWT token verification successful:', decoded);
+      return decoded;
     } catch (error) {
-      return {
-        valid: false,
-        error: error.message,
-        message: 'Token is invalid'
-      };
+      console.error('JWT token verification failed:', error);
+      throw error;
     }
   }
 

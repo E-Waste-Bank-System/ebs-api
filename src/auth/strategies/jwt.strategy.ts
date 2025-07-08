@@ -16,10 +16,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     @InjectRepository(Profile)
     private profileRepository: Repository<Profile>,
   ) {
+    const jwtSecret = configService.get<string>('JWT_SECRET');
+    console.log('JWT Strategy constructor - JWT_SECRET loaded:', jwtSecret ? 'Yes (length: ' + jwtSecret.length + ')' : 'No');
+    
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET'),
+      secretOrKey: jwtSecret,
     });
   }
 
@@ -27,23 +30,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     try {
       console.log('JWT Strategy validating payload:', payload);
       
-      // Get user from Supabase Auth
-      const supabaseUser = await this.supabaseService.getUserById(payload.sub);
-      
-      if (!supabaseUser) {
-        console.log('User not found in Supabase Auth:', payload.sub);
-        throw new UnauthorizedException('User not found');
+      if (!payload || !payload.sub) {
+        console.log('Invalid payload - missing sub field');
+        throw new UnauthorizedException('Invalid token payload');
       }
-
-      // Get or create profile in our database
+      
+      // First, try to get profile from our database
       let profile = await this.profileRepository.findOne({
         where: { id: payload.sub },
       });
 
       if (!profile) {
-        console.log('Profile not found in database, creating from Supabase data...');
+        console.log('Profile not found in database, trying to get from Supabase Auth...');
+        
+        // Try to get user from Supabase Auth
+        const supabaseUser = await this.supabaseService.getUserById(payload.sub);
+        
+        if (!supabaseUser) {
+          console.log('User not found in Supabase Auth either:', payload.sub);
+          throw new UnauthorizedException('User not found');
+        }
+
         // Create profile from Supabase user data
         profile = this.profileRepository.create({
+          id: supabaseUser.id,
           email: supabaseUser.email,
           full_name: supabaseUser.user_metadata?.full_name || supabaseUser.email.split('@')[0],
           avatar_url: supabaseUser.user_metadata?.avatar_url,
@@ -53,11 +63,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         });
         profile = await this.profileRepository.save(profile);
         
-        // Update with Supabase user ID
-        profile.id = supabaseUser.id;
-        profile = await this.profileRepository.save(profile);
-        
-        console.log('Profile created in database:', profile.id);
+        console.log('Profile created in database with ID:', profile.id);
       }
 
       if (!profile.is_active) {
@@ -65,15 +71,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         throw new UnauthorizedException('Account is inactive');
       }
 
-      console.log('JWT validation successful for user:', profile.email, 'role:', profile.role);
-
-      return {
+      const userObject = {
         id: profile.id,
         email: profile.email,
         full_name: profile.full_name,
         role: profile.role,
         avatar_url: profile.avatar_url,
       };
+
+      console.log('JWT validation successful for user:', profile.email, 'role:', profile.role, 'returning:', userObject);
+      return userObject;
     } catch (error) {
       console.error('JWT validation error:', error);
       throw new UnauthorizedException('Invalid token');

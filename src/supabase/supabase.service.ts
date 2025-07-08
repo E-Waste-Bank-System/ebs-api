@@ -26,16 +26,18 @@ export class SupabaseService {
   }
 
   async getUserById(userId: string) {
-    const { data, error } = await this.supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error) {
-      throw new Error(`User not found: ${error.message}`);
+    try {
+      const { data, error } = await this.supabase.auth.admin.getUserById(userId);
+      
+      if (error) {
+        console.error('Error getting user from Supabase Auth:', error);
+        return null;
+      }
+      
+      return data.user;
+    } catch (error) {
+      console.error('Exception getting user from Supabase Auth:', error);
+      return null;
     }
-    
-    return data;
   }
 } 

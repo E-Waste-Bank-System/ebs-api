@@ -104,8 +104,12 @@ export class ScanResponseDto {
   @ApiProperty()
   image_url: string;
 
-  @ApiProperty()
-  user_id: string;
+  @ApiPropertyOptional()
+  user?: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  };
 
   @ApiProperty({ enum: ScanStatus })
   status: ScanStatus;

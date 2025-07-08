@@ -92,7 +92,7 @@ export class ScansService {
       return {
         id: savedScan.id,
         image_url: savedScan.image_url,
-        user_id: savedScan.user_id,
+        user: undefined, // User is not joined in create, so leave as undefined
         status: savedScan.status,
         objects_count: savedScan.objects_count,
         total_estimated_value: savedScan.total_estimated_value,
@@ -114,6 +114,7 @@ export class ScansService {
     const queryBuilder = this.scanRepository
       .createQueryBuilder('scan')
       .leftJoinAndSelect('scan.objects', 'objects')
+      .leftJoinAndSelect('scan.user', 'user')
       .select([
         'scan.id',
         'scan.image_url',
@@ -124,6 +125,9 @@ export class ScansService {
         'scan.created_at',
         'scan.processed_at',
         'scan.error_message',
+        'user.id',
+        'user.full_name',
+        'user.avatar_url',
         'objects.id',
         'objects.name',
         'objects.category',
@@ -174,7 +178,11 @@ export class ScansService {
       return {
         id: scan.id,
         image_url: scan.image_url,
-        user_id: scan.user_id,
+        user: scan.user ? {
+          id: scan.user.id,
+          full_name: scan.user.full_name,
+          avatar_url: scan.user.avatar_url,
+        } : undefined,
         status: scan.status,
         objects_count: scan.objects_count,
         total_estimated_value: scan.total_estimated_value,
@@ -200,6 +208,7 @@ export class ScansService {
     const queryBuilder = this.scanRepository
       .createQueryBuilder('scan')
       .leftJoinAndSelect('scan.objects', 'objects')
+      .leftJoinAndSelect('scan.user', 'user')
       .where('scan.id = :id', { id });
 
     if (userId) {
@@ -230,7 +239,11 @@ export class ScansService {
     return {
       id: scan.id,
       image_url: scan.image_url,
-      user_id: scan.user_id,
+      user: scan.user ? {
+        id: scan.user.id,
+        full_name: scan.user.full_name,
+        avatar_url: scan.user.avatar_url,
+      } : undefined,
       status: scan.status,
       objects_count: scan.objects_count,
       total_estimated_value: scan.total_estimated_value,

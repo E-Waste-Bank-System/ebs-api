@@ -60,12 +60,52 @@ export class AIResponseDto {
   predictions: AIPredictionDto[];
 }
 
+export class ScanObjectDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  category: string;
+
+  @ApiProperty()
+  confidence_score: number;
+
+  @ApiProperty()
+  estimated_value: number;
+
+  @ApiProperty()
+  risk_level: number;
+
+  @ApiPropertyOptional()
+  damage_level?: number;
+
+  @ApiProperty()
+  description: string;
+
+  @ApiProperty({ type: [String] })
+  suggestions: string[];
+
+  @ApiProperty()
+  bounding_box: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
+
 export class ScanResponseDto {
   @ApiProperty()
   id: string;
 
   @ApiProperty()
   image_url: string;
+
+  @ApiProperty()
+  user_id: string;
 
   @ApiProperty({ enum: ScanStatus })
   status: ScanStatus;
@@ -80,7 +120,13 @@ export class ScanResponseDto {
   created_at: Date;
 
   @ApiPropertyOptional()
+  processed_at?: Date;
+
+  @ApiPropertyOptional()
   error_message?: string;
+
+  @ApiProperty({ type: [ScanObjectDto] })
+  objects: ScanObjectDto[];
 }
 
 export class ScanDetailDto extends ScanResponseDto {

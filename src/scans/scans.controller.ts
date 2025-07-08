@@ -183,11 +183,57 @@ export class ScansController {
           {
             id: '123e4567-e89b-12d3-a456-426614174000',
             image_url: 'https://storage.googleapis.com/ebs-storage/scans/scan-123.jpg',
+            user_id: '4a5b2de4-a9b7-44c3-9124-1f64d02fc9c7',
             status: 'completed',
-            objects_count: 3,
-            total_estimated_value: 45000,
-            created_at: '2024-01-15T10:30:00.000Z',
-            error_message: null
+            objects_count: 2,
+            total_estimated_value: 25750,
+            created_at: '2025-07-08T04:44:01.789Z',
+            processed_at: '2025-07-08T04:44:15.887Z',
+            error_message: null,
+            objects: [
+              {
+                id: '58a88dc1-1781-473b-aa54-52afa711be52',
+                name: 'Laptop',
+                category: 'Laptop',
+                confidence_score: 0.987,
+                estimated_value: 25000,
+                risk_level: 6,
+                damage_level: 1,
+                description: 'Laptop ASUS kondisi baik, layar bersih, casing mulus, berfungsi normal tanpa kerusakan berarti.',
+                suggestions: [
+                  'Hapus semua data pribadi dari laptop.',
+                  'Cari pusat daur ulang elektronik terdekat.',
+                  'Serahkan ke fasilitas daur ulang resmi.'
+                ],
+                bounding_box: {
+                  x: 529.5072021484375,
+                  y: 1108.0552978515625,
+                  width: 2291.7218017578125,
+                  height: 2050.2376708984375
+                }
+              },
+              {
+                id: 'f8f27289-dfdb-48d4-98c6-e4216331d3fa',
+                name: 'Mouse',
+                category: 'Mouse',
+                confidence_score: 0.985,
+                estimated_value: 750,
+                risk_level: 2,
+                damage_level: null,
+                description: 'Perangkat elektronik mouse terdeteksi dalam kondisi tidak dapat dianalisis',
+                suggestions: [
+                  'Periksa panduan dari manufacturer resmi',
+                  'Pisahkan komponen berbahaya dengan hati hati',
+                  'Bawa ke pusat daur ulang terdekat'
+                ],
+                bounding_box: {
+                  x: 1020.1337280273438,
+                  y: 3170.865478515625,
+                  width: 1098.1997680664062,
+                  height: 860.25390625
+                }
+              }
+            ]
           }
         ],
         meta: { page: 1, limit: 20, total: 1, pages: 1 }
@@ -237,27 +283,61 @@ export class ScansController {
   @ApiResponse({
     status: 200,
     description: 'Scan details retrieved successfully',
-    type: ScanDetailDto,
+    type: ScanResponseDto,
     example: {
       id: '123e4567-e89b-12d3-a456-426614174000',
       image_url: 'https://storage.googleapis.com/ebs-storage/scans/scan-123.jpg',
+      user_id: '4a5b2de4-a9b7-44c3-9124-1f64d02fc9c7',
       status: 'completed',
-      objects_count: 3,
-      total_estimated_value: 45000,
-      created_at: '2024-01-15T10:30:00.000Z',
-      user_id: 'user-uuid',
+      objects_count: 2,
+      total_estimated_value: 25750,
+      created_at: '2025-07-08T04:44:01.789Z',
+      processed_at: '2025-07-08T04:44:15.887Z',
+      error_message: null,
       objects: [
         {
-          id: 'obj-123',
+          id: '58a88dc1-1781-473b-aa54-52afa711be52',
           name: 'Laptop',
           category: 'Laptop',
-          confidence_score: 0.95,
+          confidence_score: 0.987,
           estimated_value: 25000,
-          risk_level: 4,
-          damage_level: 2
+          risk_level: 6,
+          damage_level: 1,
+          description: 'Laptop ASUS kondisi baik, layar bersih, casing mulus, berfungsi normal tanpa kerusakan berarti.',
+          suggestions: [
+            'Hapus semua data pribadi dari laptop.',
+            'Cari pusat daur ulang elektronik terdekat.',
+            'Serahkan ke fasilitas daur ulang resmi.'
+          ],
+          bounding_box: {
+            x: 529.5072021484375,
+            y: 1108.0552978515625,
+            width: 2291.7218017578125,
+            height: 2050.2376708984375
+          }
+        },
+        {
+          id: 'f8f27289-dfdb-48d4-98c6-e4216331d3fa',
+          name: 'Mouse',
+          category: 'Mouse',
+          confidence_score: 0.985,
+          estimated_value: 750,
+          risk_level: 2,
+          damage_level: null,
+          description: 'Perangkat elektronik mouse terdeteksi dalam kondisi tidak dapat dianalisis',
+          suggestions: [
+            'Periksa panduan dari manufacturer resmi',
+            'Pisahkan komponen berbahaya dengan hati hati',
+            'Bawa ke pusat daur ulang terdekat'
+          ],
+          bounding_box: {
+            x: 1020.1337280273438,
+            y: 3170.865478515625,
+            width: 1098.1997680664062,
+            height: 860.25390625
+          }
         }
-      ],
-      error_message: null
+      ]
     }
   })
   @ApiResponse({
@@ -300,7 +380,7 @@ export class ScansController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser('id') userId: string,
     @GetUser('role') userRole: UserRole,
-  ): Promise<ScanDetailDto> {
+  ): Promise<ScanResponseDto> {
     // Regular users can only access their own scans
     const effectiveUserId = userRole === UserRole.ADMIN || userRole === UserRole.SUPERADMIN 
       ? undefined 
@@ -408,7 +488,7 @@ export class AdminScansController {
       properties: {
         data: {
           type: 'array',
-          items: { $ref: '#/components/schemas/ScanDetailDto' }
+          items: { $ref: '#/components/schemas/ScanResponseDto' }
         },
         meta: {
           type: 'object',
@@ -432,7 +512,7 @@ export class AdminScansController {
     description: 'Forbidden - admin access required',
     type: ErrorResponseDto
   })
-  async findAll(@Query() query: ScanListQueryDto): Promise<PaginatedResponse<ScanDetailDto>> {
+  async findAll(@Query() query: ScanListQueryDto): Promise<PaginatedResponse<ScanResponseDto>> {
     return this.scansService.findAll(query);
   }
 
@@ -458,7 +538,7 @@ export class AdminScansController {
   @ApiResponse({
     status: 200,
     description: 'Scan details retrieved successfully',
-    type: ScanDetailDto
+    type: ScanResponseDto
   })
   @ApiResponse({
     status: 401,
@@ -475,7 +555,7 @@ export class AdminScansController {
     description: 'Scan not found',
     type: ErrorResponseDto
   })
-  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ScanDetailDto> {
+  async findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ScanResponseDto> {
     return this.scansService.findOne(id);
   }
 
@@ -577,7 +657,7 @@ export class AdminScansController {
     type: ErrorResponseDto
   })
   async debugScan(@Param('id', ParseUUIDPipe) id: string): Promise<any> {
-    const scan = await this.scansService.findOne(id);
+    const scan = await this.scansService.findOneForDebug(id);
     
     return {
       scan: {

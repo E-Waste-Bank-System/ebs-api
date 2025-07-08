@@ -9,7 +9,7 @@ import { Storage } from '@google-cloud/storage';
 
 import { Scan, ScanStatus } from './entities/scan.entity';
 import { DetectedObject } from '../objects/entities/object.entity';
-import { CreateScanDto, ScanListQueryDto, AIResponseDto, AIPredictionDto } from './dto/scan.dto';
+import { CreateScanDto, ScanListQueryDto, AIResponseDto, AIPredictionDto, ScanResponseDto, ScanObjectDto } from './dto/scan.dto';
 import { PaginatedResponse } from '../common/dto/pagination.dto';
 
 @Injectable()
@@ -67,7 +67,7 @@ export class ScansService {
     }
   }
 
-  async create(file: any, createScanDto: CreateScanDto, userId: string): Promise<Scan> {
+  async create(file: any, createScanDto: CreateScanDto, userId: string): Promise<ScanResponseDto> {
     try {
       // Upload image and get URL
       const imageUrl = await this.uploadImage(file);
@@ -88,21 +88,53 @@ export class ScansService {
         this.logger.error(`AI processing failed for scan ${savedScan.id}:`, error);
       });
 
-      return savedScan;
+      // Return ScanResponseDto format
+      return {
+        id: savedScan.id,
+        image_url: savedScan.image_url,
+        user_id: savedScan.user_id,
+        status: savedScan.status,
+        objects_count: savedScan.objects_count,
+        total_estimated_value: savedScan.total_estimated_value,
+        created_at: savedScan.created_at,
+        processed_at: savedScan.processed_at,
+        error_message: savedScan.error_message,
+        objects: [] // Empty array since AI processing is async
+      };
     } catch (error) {
       this.logger.error('Failed to create scan:', error);
       throw new BadRequestException('Failed to create scan');
     }
   }
 
-  async findAll(query: ScanListQueryDto, userId?: string): Promise<PaginatedResponse<Scan>> {
+  async findAll(query: ScanListQueryDto, userId?: string): Promise<PaginatedResponse<ScanResponseDto>> {
     const { page = 1, limit = 20, status, user_id } = query;
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.scanRepository
       .createQueryBuilder('scan')
-      .leftJoinAndSelect('scan.user', 'user')
-      .leftJoinAndSelect('scan.objects', 'objects');
+      .leftJoinAndSelect('scan.objects', 'objects')
+      .select([
+        'scan.id',
+        'scan.image_url',
+        'scan.user_id',
+        'scan.status',
+        'scan.objects_count',
+        'scan.total_estimated_value',
+        'scan.created_at',
+        'scan.processed_at',
+        'scan.error_message',
+        'objects.id',
+        'objects.name',
+        'objects.category',
+        'objects.confidence_score',
+        'objects.estimated_value',
+        'objects.risk_level',
+        'objects.damage_level',
+        'objects.description',
+        'objects.suggestions',
+        'objects.bounding_box'
+      ]);
 
     // If not admin, filter by user
     if (userId) {
@@ -123,8 +155,38 @@ export class ScansService {
       .take(limit)
       .getManyAndCount();
 
+    // Transform to ScanResponseDto format
+    const scanResponses: ScanResponseDto[] = scans.map(scan => {
+      // Transform objects to ScanObjectDto format
+      const objects: ScanObjectDto[] = (scan.objects || []).map(obj => ({
+        id: obj.id,
+        name: obj.name,
+        category: obj.category,
+        confidence_score: parseFloat(obj.confidence_score.toString()),
+        estimated_value: obj.estimated_value,
+        risk_level: obj.risk_level,
+        damage_level: obj.damage_level,
+        description: obj.description,
+        suggestions: obj.suggestions || [],
+        bounding_box: obj.bounding_box
+      }));
+
+      return {
+        id: scan.id,
+        image_url: scan.image_url,
+        user_id: scan.user_id,
+        status: scan.status,
+        objects_count: scan.objects_count,
+        total_estimated_value: scan.total_estimated_value,
+        created_at: scan.created_at,
+        processed_at: scan.processed_at,
+        error_message: scan.error_message,
+        objects
+      };
+    });
+
     return {
-      data: scans,
+      data: scanResponses,
       meta: {
         page,
         limit,
@@ -134,16 +196,57 @@ export class ScansService {
     };
   }
 
-  async findOne(id: string, userId?: string): Promise<Scan> {
+  async findOne(id: string, userId?: string): Promise<ScanResponseDto> {
     const queryBuilder = this.scanRepository
       .createQueryBuilder('scan')
       .leftJoinAndSelect('scan.objects', 'objects')
-      .leftJoinAndSelect('scan.user', 'user')
       .where('scan.id = :id', { id });
 
     if (userId) {
       queryBuilder.andWhere('scan.user_id = :userId', { userId });
     }
+
+    const scan = await queryBuilder.getOne();
+
+    if (!scan) {
+      throw new NotFoundException('Scan not found');
+    }
+
+    // Transform objects to ScanObjectDto format
+    const objects: ScanObjectDto[] = (scan.objects || []).map(obj => ({
+      id: obj.id,
+      name: obj.name,
+      category: obj.category,
+      confidence_score: parseFloat(obj.confidence_score.toString()),
+      estimated_value: obj.estimated_value,
+      risk_level: obj.risk_level,
+      damage_level: obj.damage_level,
+      description: obj.description,
+      suggestions: obj.suggestions || [],
+      bounding_box: obj.bounding_box
+    }));
+
+    // Return ScanResponseDto format
+    return {
+      id: scan.id,
+      image_url: scan.image_url,
+      user_id: scan.user_id,
+      status: scan.status,
+      objects_count: scan.objects_count,
+      total_estimated_value: scan.total_estimated_value,
+      created_at: scan.created_at,
+      processed_at: scan.processed_at,
+      error_message: scan.error_message,
+      objects
+    };
+  }
+
+  async findOneForDebug(id: string): Promise<Scan> {
+    const queryBuilder = this.scanRepository
+      .createQueryBuilder('scan')
+      .leftJoinAndSelect('scan.objects', 'objects')
+      .leftJoinAndSelect('scan.user', 'user')
+      .where('scan.id = :id', { id });
 
     const scan = await queryBuilder.getOne();
 

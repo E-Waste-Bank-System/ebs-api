@@ -38,7 +38,7 @@ async function bootstrap() {
           process.env.CLIENT_ORIGIN, 
           'https://ebs-web-981332637673.asia-southeast2.run.app',
           'http://localhost:3000',
-          'https://ewastehub.netlify.app'
+          'https://ewaste-hub.netlify.app'
         ] 
       : [
           process.env.CLIENT_ORIGIN || 'http://localhost:3000', 

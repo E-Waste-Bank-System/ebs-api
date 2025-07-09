@@ -564,6 +564,8 @@ export class AdminArticlesController {
 
   @Patch(':id')
   @Auth(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @UseInterceptors(FileInterceptor('featured_image'))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({ 
     summary: 'Update article',
     description: 'Update an existing article with new data'
@@ -573,7 +575,10 @@ export class AdminArticlesController {
     description: 'Article UUID',
     example: '123e4567-e89b-12d3-a456-426614174000'
   })
-  @ApiBody({ type: UpdateArticleDto })
+  @ApiBody({ 
+    type: UpdateArticleDto,
+    description: 'Article data (JSON) or multipart/form-data with featured_image file'
+  })
   @ApiResponse({
     status: 200,
     description: 'Article updated successfully',
@@ -616,34 +621,61 @@ export class AdminArticlesController {
   })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateArticleDto: UpdateArticleDto,
+    @Body() updateArticleDto: any, // Use any to handle both JSON and form data
+    @UploadedFile() file: any,
   ): Promise<ArticleResponseDto> {
     this.logger.logDebug(`Article update requested for ID: ${id}`);
-    const article = await this.articlesService.update(id, updateArticleDto);
     
-    return {
-      id: article.id,
-      title: article.title,
-      slug: article.slug,
-      content: article.content,
-      excerpt: article.excerpt,
-      featured_image: article.featured_image,
-      status: article.status,
-      tags: article.tags,
-      view_count: article.view_count,
-      meta_title: article.meta_title,
-      meta_description: article.meta_description,
-      is_featured: article.is_featured,
-      created_at: article.created_at,
-      updated_at: article.updated_at,
-      published_at: article.published_at,
-      author: article.author ? {
-        id: article.author.id,
-        email: article.author.email,
-        full_name: article.author.full_name,
-        avatar_url: article.author.avatar_url,
-      } : undefined,
-    };
+    try {
+      // Handle featured image upload if provided
+      let featuredImageUrl: string | undefined;
+      if (file) {
+        this.logger.logDebug(`Processing featured image upload: ${file.originalname}`);
+        featuredImageUrl = await this.uploadService.uploadFile(file, 'articles');
+      }
+
+      // Transform and validate the DTO
+      const dto = plainToClass(UpdateArticleDto, {
+        ...updateArticleDto,
+        featured_image: featuredImageUrl,
+      });
+
+      const errors = await validate(dto);
+      if (errors.length > 0) {
+        this.logger.logError('Article update validation failed:', errors);
+        throw new BadRequestException('Invalid article data');
+      }
+
+      const article = await this.articlesService.update(id, dto);
+      this.logger.logInfo(`Article updated successfully: ${article.id}`);
+      
+      return {
+        id: article.id,
+        title: article.title,
+        slug: article.slug,
+        content: article.content,
+        excerpt: article.excerpt,
+        featured_image: article.featured_image,
+        status: article.status,
+        tags: article.tags,
+        view_count: article.view_count,
+        meta_title: article.meta_title,
+        meta_description: article.meta_description,
+        is_featured: article.is_featured,
+        created_at: article.created_at,
+        updated_at: article.updated_at,
+        published_at: article.published_at,
+        author: article.author ? {
+          id: article.author.id,
+          email: article.author.email,
+          full_name: article.author.full_name,
+          avatar_url: article.author.avatar_url,
+        } : undefined,
+      };
+    } catch (error) {
+      this.logger.logError('Article update failed:', error);
+      throw error;
+    }
   }
 
   @Delete(':id')

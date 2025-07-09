@@ -37,6 +37,7 @@ export class CreateArticleDto {
     console.log('DTO Transform - Returning as-is');
     return value;
   })
+  @ValidateIf((o) => o.content !== undefined)
   content: any;
 
   @ApiPropertyOptional({
@@ -60,6 +61,14 @@ export class CreateArticleDto {
     example: ['recycling', 'environment', 'technology'],
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    // Handle both string and array inputs
+    if (typeof value === 'string') {
+      // Split comma-separated string into array
+      return value.split(',').map(tag => tag.trim()).filter(Boolean);
+    }
+    return value;
+  })
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
@@ -83,6 +92,7 @@ export class CreateArticleDto {
     }
     return value;
   })
+  @ValidateIf((o) => o.status !== undefined)
   status?: ArticleStatus = ArticleStatus.DRAFT;
 
   @ApiPropertyOptional({
@@ -100,6 +110,14 @@ export class CreateArticleDto {
   @IsOptional()
   @IsString()
   meta_description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Author ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsOptional()
+  @IsString()
+  author_id?: string;
 }
 
 export class UpdateArticleDto extends PartialType(CreateArticleDto) {}

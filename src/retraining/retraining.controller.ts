@@ -24,6 +24,7 @@ import { UserRole } from '../common/enums/role.enum';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { AnnotationStatus, DatasetStatus } from './entities/retraining.entity';
 import { ErrorResponseDto } from '../common/dto/response.dto';
+import { AppLogger } from '../common/utils/logger.util';
 
 @ApiTags('🤖 AI Training & Datasets')
 @Controller('retraining')
@@ -31,6 +32,8 @@ import { ErrorResponseDto } from '../common/dto/response.dto';
 @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
 @ApiBearerAuth('JWT-auth')
 export class RetrainingController {
+  private readonly logger = AppLogger.getInstance('RetrainingController');
+
   constructor(private readonly retrainingService: RetrainingService) {}
 
   @Post()
@@ -981,7 +984,22 @@ export class RetrainingController {
     @Body() exportDto: { objectIds: string[] },
     @Res() res: Response
   ) {
-    // Implementation for YOLO export
-    res.status(200).send('YOLO export endpoint');
+    try {
+      this.logger.logDebug(`YOLO export requested for ${exportDto.objectIds.length} objects`);
+      
+      const archive = await this.retrainingService.exportYoloDataset(exportDto.objectIds);
+      
+      // Set response headers for file download
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="yolo-dataset-${Date.now()}.zip"`);
+      
+      // Pipe the archive to the response
+      archive.pipe(res);
+      
+      this.logger.logInfo(`YOLO dataset exported successfully with ${exportDto.objectIds.length} objects`);
+    } catch (error) {
+      this.logger.logError('YOLO export failed:', error);
+      throw error;
+    }
   }
 } 

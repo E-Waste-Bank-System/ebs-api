@@ -18,8 +18,8 @@ export class ErrorResponseDto {
 }
 
 export class HealthResponseDto {
-  @ApiProperty({ description: 'Service status', enum: ['ok', 'error'] })
-  status: 'ok' | 'error';
+  @ApiProperty({ description: 'Service status', enum: ['ok', 'error', 'warning', 'degraded'] })
+  status: 'ok' | 'error' | 'warning' | 'degraded';
 
   @ApiProperty({ description: 'Response timestamp' })
   timestamp: string;
@@ -38,11 +38,16 @@ export class HealthResponseDto {
     status: string;
     responseTime?: string;
     error?: string;
+    version?: string;
+    connectionPool?: any;
   };
 
-  @ApiPropertyOptional({ description: 'Service health status' })
-  services?: {
-    api: string;
-    database: string;
-  };
+  @ApiPropertyOptional({ description: 'Services status' })
+  services?: any;
+
+  @ApiPropertyOptional({ description: 'System metrics' })
+  system?: any;
+
+  @ApiPropertyOptional({ description: 'Performance metrics' })
+  metrics?: any;
 } 

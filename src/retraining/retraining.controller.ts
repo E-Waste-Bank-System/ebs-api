@@ -25,6 +25,25 @@ import { GetUser } from '../auth/decorators/get-user.decorator';
 import { AnnotationStatus, DatasetStatus } from './entities/retraining.entity';
 import { ErrorResponseDto } from '../common/dto/response.dto';
 import { AppLogger } from '../common/utils/logger.util';
+import { CreateRetrainingDataDto } from './dto/retraining-data.dto';
+import { RetrainingDataResponseDto } from './dto/retraining-data-response.dto';
+import { CreateDatasetDto } from './dto/create-dataset.dto';
+import { DatasetResponseDto } from './dto/dataset-response.dto';
+import { UpdateAnnotationTaskDto } from './dto/update-annotation-task.dto';
+
+function toRetrainingDataResponseDto(entity: any): RetrainingDataResponseDto {
+  return {
+    ...entity,
+    created_at: entity.created_at?.toISOString?.() ?? '',
+  };
+}
+
+function toDatasetResponseDto(entity: any): DatasetResponseDto {
+  return {
+    ...entity,
+    created_at: entity.created_at?.toISOString?.() ?? '',
+  };
+}
 
 @ApiTags('🤖 AI Training & Datasets')
 @Controller('retraining')
@@ -48,67 +67,20 @@ export class RetrainingController {
       \n      **Access Control:** ADMIN and SUPERADMIN only
     `
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        type: { 
-          type: 'string', 
-          enum: ['correction', 'validation', 'improvement', 'annotation'],
-          example: 'correction'
-        },
-        original_category: { type: 'string', example: 'Laptop' },
-        corrected_category: { type: 'string', example: 'Desktop Computer' },
-        original_confidence: { type: 'number', example: 0.85 },
-        corrected_value: { type: 'number', example: 200000 },
-        object_id: { type: 'string', format: 'uuid', example: '123e4567-e89b-12d3-a456-426614174000' },
-        notes: { type: 'string', example: 'Category correction for better accuracy' }
-      },
-      required: ['type', 'original_category', 'original_confidence']
-    }
-  })
+  @ApiBody({ type: CreateRetrainingDataDto })
   @ApiResponse({
     status: 201,
     description: 'Retraining data created successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        type: { type: 'string' },
-        original_category: { type: 'string' },
-        corrected_category: { type: 'string' },
-        original_confidence: { type: 'number' },
-        corrected_value: { type: 'number' },
-        created_at: { type: 'string', format: 'date-time' }
-      }
-    },
-    example: {
-      id: 'retrain-123',
-      type: 'correction',
-      original_category: 'Laptop',
-      corrected_category: 'Desktop Computer',
-      original_confidence: 0.85,
-      corrected_value: 200000,
-      created_at: '2024-01-15T10:30:00.000Z'
-    }
+    type: RetrainingDataResponseDto,
   })
   @ApiResponse({
     status: 400,
     description: 'Bad request - invalid retraining data',
     type: ErrorResponseDto
   })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - authentication required',
-    type: ErrorResponseDto
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - admin access required',
-    type: ErrorResponseDto
-  })
-  async create(@Body() createRetrainingDto: any) {
-    return await this.retrainingService.create(createRetrainingDto);
+  async create(@Body() createRetrainingDto: CreateRetrainingDataDto): Promise<RetrainingDataResponseDto> {
+    const entity = await this.retrainingService.create(createRetrainingDto);
+    return toRetrainingDataResponseDto(entity);
   }
 
   @Get()
@@ -127,35 +99,11 @@ export class RetrainingController {
   @ApiResponse({
     status: 200,
     description: 'Retraining data retrieved successfully',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' },
-          type: { type: 'string' },
-          original_category: { type: 'string' },
-          corrected_category: { type: 'string' },
-          original_confidence: { type: 'number' },
-          corrected_value: { type: 'number' },
-          is_processed: { type: 'boolean' },
-          created_at: { type: 'string', format: 'date-time' }
-        }
-      }
-    }
+    type: [RetrainingDataResponseDto],
   })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized - authentication required',
-    type: ErrorResponseDto
-  })
-  @ApiResponse({
-    status: 403,
-    description: 'Forbidden - admin access required',
-    type: ErrorResponseDto
-  })
-  async findAll() {
-    return await this.retrainingService.findAll();
+  async findAll(): Promise<RetrainingDataResponseDto[]> {
+    const entities = await this.retrainingService.findAll();
+    return entities.map(toRetrainingDataResponseDto);
   }
 
   @Delete(':id')
@@ -202,52 +150,21 @@ export class RetrainingController {
       \n      **Access Control:** ADMIN and SUPERADMIN only
     `
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', example: 'E-Waste Detection Dataset v2.0' },
-        description: { type: 'string', example: 'Improved dataset with corrected annotations' },
-        configuration: {
-          type: 'object',
-          properties: {
-            train_split: { type: 'number', example: 0.7 },
-            val_split: { type: 'number', example: 0.2 },
-            test_split: { type: 'number', example: 0.1 }
-          }
-        }
-      },
-      required: ['name']
-    }
-  })
+  @ApiBody({ type: CreateDatasetDto })
   @ApiResponse({
     status: 201,
     description: 'Dataset created successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', format: 'uuid' },
-        name: { type: 'string' },
-        description: { type: 'string' },
-        status: { type: 'string', enum: ['draft', 'annotating', 'ready', 'training', 'completed', 'failed'] },
-        total_images: { type: 'number' },
-        annotated_images: { type: 'number' },
-        created_at: { type: 'string', format: 'date-time' }
-      }
-    }
+    type: DatasetResponseDto,
   })
   async createDataset(
-    @Body() createDatasetDto: {
-      name: string;
-      description?: string;
-      configuration?: any;
-    },
+    @Body() createDatasetDto: CreateDatasetDto,
     @GetUser() user: any
-  ) {
-    return await this.retrainingService.createDataset({
+  ): Promise<DatasetResponseDto> {
+    const entity = await this.retrainingService.createDataset({
       ...createDatasetDto,
       created_by: user.id,
     });
+    return toDatasetResponseDto(entity);
   }
 
   @Get('datasets')
@@ -545,37 +462,7 @@ export class RetrainingController {
     description: 'Annotation task UUID',
     example: '123e4567-e89b-12d3-a456-426614174000'
   })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        annotations: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              category: { type: 'string' },
-              bbox: {
-                type: 'object',
-                properties: {
-                  x: { type: 'number' },
-                  y: { type: 'number' },
-                  width: { type: 'number' },
-                  height: { type: 'number' }
-                }
-              },
-              confidence: { type: 'number' },
-              is_ai_generated: { type: 'boolean' },
-              verified: { type: 'boolean' }
-            }
-          }
-        },
-        status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'reviewed', 'rejected'] },
-        notes: { type: 'string' }
-      }
-    }
-  })
+  @ApiBody({ type: UpdateAnnotationTaskDto })
   @ApiResponse({
     status: 200,
     description: 'Annotation task updated successfully'
@@ -587,11 +474,7 @@ export class RetrainingController {
   })
   async updateAnnotationTask(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateTaskDto: {
-      annotations?: any[];
-      status?: AnnotationStatus;
-      notes?: string;
-    }
+    @Body() updateTaskDto: UpdateAnnotationTaskDto
   ) {
     return await this.retrainingService.updateAnnotationTask(id, updateTaskDto);
   }

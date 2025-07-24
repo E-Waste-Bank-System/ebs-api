@@ -16,6 +16,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../common/enums/role.enum';
 import { ErrorResponseDto } from '../common/dto/response.dto';
+import { UploadFileRequestDto, UploadFileResponseDto } from './dto/upload-file.dto';
 
 @ApiTags('📁 Upload')
 @Controller('upload')
@@ -52,55 +53,12 @@ export class UploadController {
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     description: 'File upload with optional path organization',
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-          description: 'File to upload (JPG, PNG, GIF, WebP, PDF, TXT - max 10MB)',
-          example: 'featured-image.jpg'
-        },
-        path: {
-          type: 'string',
-          description: 'Optional custom folder path for organization',
-          example: 'articles/featured-images',
-          pattern: '^[a-zA-Z0-9/_-]+$'
-        }
-      },
-      required: ['file']
-    },
-    examples: {
-      image: {
-        summary: 'Upload image',
-        value: {
-          file: 'featured-image.jpg',
-          path: 'articles/featured-images'
-        }
-      },
-      document: {
-        summary: 'Upload document',
-        value: {
-          file: 'document.pdf',
-          path: 'documents'
-        }
-      }
-    }
+    type: UploadFileRequestDto,
   })
   @ApiResponse({
     status: 201,
     description: 'File uploaded successfully to cloud storage',
-    schema: {
-      type: 'object',
-      properties: {
-        url: {
-          type: 'string',
-          format: 'uri',
-          description: 'Public URL of the uploaded file',
-          example: 'https://storage.googleapis.com/ebs-storage/uploads/2024/01/15/image-123.jpg'
-        }
-      }
-    },
+    type: UploadFileResponseDto,
     example: {
       url: 'https://storage.googleapis.com/ebs-storage/articles/featured-images/sustainable-tech-guide.jpg'
     }
@@ -155,8 +113,8 @@ export class UploadController {
   })
   async uploadFile(
     @UploadedFile() file: any,
-    @Body() body: { path?: string },
-  ): Promise<{ url: string }> {
+    @Body() body: UploadFileRequestDto,
+  ): Promise<UploadFileResponseDto> {
     if (!file) {
       throw new BadRequestException('File is required');
     }

@@ -4,6 +4,9 @@ import { Repository } from 'typeorm';
 import { Scan, ScanStatus } from '../scans/entities/scan.entity';
 import { DetectedObject } from '../objects/entities/object.entity';
 import { Profile } from '../profiles/entities/profile.entity';
+import { DashboardSummaryDto } from './dto/dashboard-summary.dto';
+import { DashboardObjectStatsDto, CategoryStatsDto, RiskStatsDto } from './dto/dashboard-object-stats.dto';
+import { DashboardActivityDto, RecentScanDto } from './dto/dashboard-activity.dto';
 
 @Injectable()
 export class DashboardService {
@@ -16,7 +19,7 @@ export class DashboardService {
     private profileRepository: Repository<Profile>,
   ) {}
 
-  async getDashboardSummary() {
+  async getDashboardSummary(): Promise<DashboardSummaryDto> {
     const [
       totalScans,
       totalObjects,
@@ -47,7 +50,7 @@ export class DashboardService {
     };
   }
 
-  async getObjectStats() {
+  async getObjectStats(): Promise<DashboardObjectStatsDto> {
     const categoryStats = await this.objectRepository
       .createQueryBuilder('object')
       .select('object.category', 'category')
@@ -65,12 +68,20 @@ export class DashboardService {
       .getRawMany();
 
     return {
-      by_category: categoryStats,
-      by_risk_level: riskStats,
+      by_category: categoryStats.map((c: any) => ({
+        category: c.category,
+        count: Number(c.count),
+        avg_confidence: Number(c.avg_confidence),
+        total_value: Number(c.total_value),
+      })),
+      by_risk_level: riskStats.map((r: any) => ({
+        risk_level: Number(r.risk_level),
+        count: Number(r.count),
+      })),
     };
   }
 
-  async getRecentActivity(limit: number = 10) {
+  async getRecentActivity(limit: number = 10): Promise<DashboardActivityDto> {
     const recentScans = await this.scanRepository.find({
       relations: ['user'],
       order: { created_at: 'DESC' },
@@ -83,7 +94,7 @@ export class DashboardService {
         user_name: scan.user?.full_name,
         status: scan.status,
         objects_count: scan.objects_count,
-        created_at: scan.created_at,
+        created_at: scan.created_at?.toISOString?.() || String(scan.created_at),
       })),
     };
   }

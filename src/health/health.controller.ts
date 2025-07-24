@@ -8,6 +8,10 @@ import { HealthResponseDto } from '../common/dto/response.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import * as os from 'os';
 import * as process from 'process';
+import { HealthDbStatusDto } from './dto/health-db.dto';
+import { HealthServiceStatusDto } from './dto/health-services.dto';
+import { HealthSystemStatusDto } from './dto/health-system.dto';
+import { HealthDetailedStatusDto } from './dto/health-detailed.dto';
 
 @ApiTags('🏥 Health')
 @Controller('health')
@@ -169,31 +173,16 @@ export class HealthController {
   @ApiResponse({ 
     status: 200, 
     description: 'Database is healthy',
-    example: {
-      status: 'ok',
-      database: {
-        connected: true,
-        responseTime: '15ms',
-        serverTime: '2024-01-15T10:30:00.000Z',
-        version: '15.4'
-      }
-    }
+    type: HealthDbStatusDto,
   })
   @ApiResponse({ 
     status: 503, 
     description: 'Database is unhealthy',
-    example: {
-      status: 'error',
-      database: {
-        connected: false,
-        error: 'Connection timeout after 5000ms'
-      }
-    }
+    type: HealthDbStatusDto,
   })
-  async getDatabaseHealth() {
+  async getDatabaseHealth(): Promise<HealthDbStatusDto> {
     try {
       const dbHealth = await this.checkDatabaseHealth();
-      
       return {
         status: dbHealth.status === 'connected' ? 'ok' : 'error',
         timestamp: new Date().toISOString(),
@@ -201,7 +190,6 @@ export class HealthController {
       };
     } catch (error) {
       this.logger.error('Database health check failed:', error);
-      
       return {
         status: 'error',
         timestamp: new Date().toISOString(),
@@ -236,35 +224,14 @@ export class HealthController {
   @ApiResponse({
     status: 200,
     description: 'Services health status',
-    example: {
-      status: 'ok',
-      services: {
-        aiService: {
-          status: 'available',
-          responseTime: '245ms',
-          url: 'https://ebs-ai-service.run.app',
-          lastCheck: '2024-01-15T10:30:00.000Z'
-        },
-        storage: {
-          status: 'available',
-          bucket: 'ebs-storage',
-          project: 'ebs-cloud-456404'
-        },
-        supabase: {
-          status: 'available',
-          url: 'https://xyz.supabase.co'
-        }
-      }
-    }
+    type: HealthServiceStatusDto,
   })
-  async getServicesHealth() {
+  async getServicesHealth(): Promise<HealthServiceStatusDto> {
     try {
       const servicesHealth = await this.checkExternalServices();
-      
       const allHealthy = Object.values(servicesHealth).every(
         service => service.status === 'available'
       );
-
       return {
         status: allHealthy ? 'ok' : 'degraded',
         timestamp: new Date().toISOString(),
@@ -272,10 +239,10 @@ export class HealthController {
       };
     } catch (error) {
       this.logger.error('Services health check failed:', error);
-      
       return {
         status: 'error',
         timestamp: new Date().toISOString(),
+        services: {},
         error: error.message,
       };
     }
@@ -306,36 +273,13 @@ export class HealthController {
   @ApiResponse({
     status: 200,
     description: 'System health metrics',
-    example: {
-      status: 'ok',
-      system: {
-        platform: 'linux',
-        architecture: 'x64',
-        nodeVersion: 'v18.17.0',
-        uptime: 3600,
-        loadAverage: [0.5, 0.3, 0.2],
-        memory: {
-          total: 2048000000,
-          free: 1024000000,
-          used: 1024000000,
-          usage: 50
-        },
-        cpu: {
-          cores: 4,
-          model: 'Intel(R) Core(TM) i7-8550U',
-          usage: 25.5
-        }
-      }
-    }
+    type: HealthSystemStatusDto,
   })
-  async getSystemMetrics() {
+  async getSystemMetrics(): Promise<HealthSystemStatusDto> {
     try {
       const systemHealth = this.getSystemHealth();
-      
-      // Determine system health based on thresholds
       const memoryUsage = (systemHealth.memory.used / systemHealth.memory.total) * 100;
       const isHealthy = memoryUsage < 90 && systemHealth.loadAverage[0] < systemHealth.cpu.cores;
-
       return {
         status: isHealthy ? 'ok' : 'warning',
         timestamp: new Date().toISOString(),
@@ -343,10 +287,10 @@ export class HealthController {
       };
     } catch (error) {
       this.logger.error('System health check failed:', error);
-      
       return {
         status: 'error',
         timestamp: new Date().toISOString(),
+        system: {},
         error: error.message,
       };
     }
@@ -374,33 +318,29 @@ export class HealthController {
       - System monitoring dashboards
     `
   })
-  async getDetailedHealth() {
+  @ApiResponse({
+    status: 200,
+    description: 'Comprehensive health report',
+    type: HealthDetailedStatusDto,
+  })
+  async getDetailedHealth(): Promise<HealthDetailedStatusDto> {
     const timestamp = new Date().toISOString();
     const uptime = Math.floor((Date.now() - this.startTime) / 1000);
-
     try {
       const [dbHealth, servicesHealth, systemHealth] = await Promise.all([
         this.checkDatabaseHealth(),
         this.checkExternalServices(),
         Promise.resolve(this.getSystemHealth()),
       ]);
-
-      // Get database statistics
       const dbStats = await this.getDatabaseStatistics();
-      
-      // Get API metrics
       const apiMetrics = await this.getAPIMetrics();
-
-      // Configuration check
       const configHealth = this.checkConfiguration();
-
       const overallHealth = this.calculateOverallHealth({
         database: dbHealth,
         services: servicesHealth,
         system: systemHealth,
         config: configHealth,
       });
-
       return {
         status: overallHealth.status,
         timestamp,
@@ -421,13 +361,16 @@ export class HealthController {
       };
     } catch (error) {
       this.logger.error('Detailed health check failed:', error);
-      
       return {
         status: 'error',
         timestamp,
         uptime,
         error: error.message,
         message: 'Detailed health check failed',
+        environment: this.configService.get('NODE_ENV', 'development'),
+        version: this.configService.get('API_VERSION', '1.0.0'),
+        components: {},
+        summary: {},
       };
     }
   }
